@@ -15,8 +15,7 @@ dependencies:
   http: ^1.6.0
   path_provider: ^2.1.2
   just_audio: ^0.9.36
-  just_audio_mpv: ^0.1.0 # Implementación para Linux
-
+  audio_service: ^0.18.2
   rxdart: ^0.27.7
   audioplayers: ^5.2.1
 
@@ -24,6 +23,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: "^0.11.0"
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.jpg"

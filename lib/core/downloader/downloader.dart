@@ -5,12 +5,14 @@ import 'package:path_provider/path_provider.dart';
 Future<File> saveMp3ToStorageWithTitle(
     Uint8List mp3Bytes,
     String title,
+    String videoId,
     ) async {
 
   final directory = await getApplicationDocumentsDirectory();
 
   final safeTitle = sanitizeFileName(title);
-  final filePath = '${directory.path}/$safeTitle.mp3';
+  // Formato: videoId_titulo.mp3
+  final filePath = '${directory.path}/${videoId}_$safeTitle.mp3';
 
   final file = File(filePath);
 
@@ -41,4 +43,3 @@ String sanitizeFileName(String input) {
   // 5. Limpieza final
       .trim();
 }
-

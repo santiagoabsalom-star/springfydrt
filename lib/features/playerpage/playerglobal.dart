@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart' as audioplayers;
-import 'package:just_audio/just_audio.dart' as just_audio;
 import 'package:rxdart/rxdart.dart';
+import '../../main.dart'; // Para acceder a audioHandler
 
 import '../home/dtos/LocalSong.dart';
 
@@ -34,12 +35,10 @@ class GlobalAudioPlayer {
   Stream<DurationState> get durationState => _durationStateSubject.stream;
 
   void _init() {
-    // Listen to player events and update our duration state subject
     _player.positionStream.listen((_) => _updateDurationState());
     _player.durationStream.listen((_) => _updateDurationState());
     _player.playingStream.listen((_) => _updateDurationState());
 
-    // Periodic update for smooth progress bar and to ensure sync
     Stream.periodic(const Duration(milliseconds: 200)).listen((_) {
       if (_player.isPlaying) {
         _updateDurationState();
@@ -49,12 +48,24 @@ class GlobalAudioPlayer {
     _player.playerCompletionStream.listen((_) {
       next();
     });
+
+    // Sincronizar el estado del audioHandler con el sujeto local para la UI
+    if (Platform.isAndroid) {
+      audioHandler.mediaItem.listen((item) {
+        if (item != null) {
+          final song = _currentPlaylist.firstWhere(
+            (s) => s.path == item.id,
+            orElse: () => LocalSong(title: item.title, path: item.id),
+          );
+          _currentSongSubject.add(song);
+        }
+      });
+    }
   }
 
   void _updateDurationState() {
     if (!_durationStateSubject.isClosed) {
       final newState = currentDurationState;
-      // Only add if it's different to avoid unnecessary rebuilds
       if (newState.position != _durationStateSubject.value.position ||
           newState.total != _durationStateSubject.value.total) {
         _durationStateSubject.add(newState);
@@ -85,23 +96,26 @@ class GlobalAudioPlayer {
 
     _currentIndex = startIndex;
 
-    if (_currentIndex >= 0 && _currentIndex < _currentPlaylist.length) {
-      await _playIndex(_currentIndex);
+    if (Platform.isAndroid) {
+      final mediaItems = songs.map((s) => MediaItem(
+        id: s.path,
+        album: "Local",
+        title: s.title,
+        artist: "Desconocido",
+      )).toList();
+      await audioHandler.loadPlaylist(mediaItems, startIndex: startIndex);
+    } else {
+      if (_currentIndex >= 0 && _currentIndex < _currentPlaylist.length) {
+        await _playIndex(_currentIndex);
+      }
     }
   }
 
   Future<void> _playIndex(int index) async {
     final song = _currentPlaylist[index];
-    
-    // Update UI immediately for song title
     _currentSongSubject.add(song);
-    
-    // Reset duration state immediately so the bar doesn't show old values
     _durationStateSubject.add(DurationState(Duration.zero, Duration.zero));
-    
     await _player.playFile(song.path);
-    
-    // After playing starts, update state again to be sure
     _updateDurationState();
   }
 
@@ -111,19 +125,22 @@ class GlobalAudioPlayer {
 
   void seek(Duration d) {
     _player.seek(d);
-    // Optimistically update the UI position
     _durationStateSubject.add(DurationState(d, _player.duration ?? Duration.zero));
   }
 
   void next() {
-    if (_currentIndex + 1 < _currentPlaylist.length) {
+    if (Platform.isAndroid) {
+      audioHandler.skipToNext();
+    } else if (_currentIndex + 1 < _currentPlaylist.length) {
       _currentIndex++;
       _playIndex(_currentIndex);
     }
   }
 
   void previous() {
-    if (_currentIndex - 1 >= 0) {
+    if (Platform.isAndroid) {
+      audioHandler.skipToPrevious();
+    } else if (_currentIndex - 1 >= 0) {
       _currentIndex--;
       _playIndex(_currentIndex);
     }
@@ -168,52 +185,52 @@ abstract class AppAudioPlayer {
 }
 
 class AndroidAudioPlayer implements AppAudioPlayer {
-  final just_audio.AudioPlayer _player = just_audio.AudioPlayer();
+  // Usamos el audioHandler global en lugar de una instancia privada de just_audio
+  
+  @override
+  Stream<Duration> get positionStream => AudioService.position;
 
   @override
-  Stream<Duration> get positionStream => _player.positionStream;
+  Stream<Duration?> get durationStream => audioHandler.mediaItem.map((item) => item?.duration);
 
   @override
-  Stream<Duration?> get durationStream => _player.durationStream;
+  Stream<bool> get playingStream => audioHandler.playbackState.map((state) => state.playing);
 
   @override
-  Stream<bool> get playingStream => _player.playingStream;
-
-  @override
-  Stream<void> get playerCompletionStream => _player.processingStateStream
-      .where((state) => state == just_audio.ProcessingState.completed)
+  Stream<void> get playerCompletionStream => audioHandler.playbackState
+      .where((state) => state.processingState == AudioProcessingState.completed)
       .map((_) => null);
 
   @override
-  bool get isPlaying => _player.playing;
+  bool get isPlaying => audioHandler.playbackState.value.playing;
 
   @override
-  Duration get position => _player.position;
+  Duration get position => audioHandler.playbackState.value.position;
 
   @override
-  Duration? get duration => _player.duration;
+  Duration? get duration => audioHandler.mediaItem.value?.duration;
 
   @override
   Future<void> playFile(String path) async {
-    await _player.stop();
-    await _player.setFilePath(path);
-    await _player.play();
+    // Esto lo maneja setPlaylist cargando la cola en el handler
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() => audioHandler.pause();
 
   @override
-  Future<void> resume() => _player.play();
+  Future<void> resume() => audioHandler.play();
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() => audioHandler.stop();
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) => audioHandler.seek(position);
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    // El handler es global, no lo destruimos aquí
+  }
 }
 
 class LinuxAudioPlayer implements AppAudioPlayer {

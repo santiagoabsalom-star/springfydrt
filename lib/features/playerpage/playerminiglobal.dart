@@ -1,4 +1,6 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
 import 'playerglobal.dart';
 import 'playerpage.dart';
@@ -9,6 +11,26 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = GlobalAudioPlayer.instance;
+    StreamBuilder<MediaItem?>(
+      stream: audioHandler.mediaItem,
+      builder: (context, snapshot) {
+        final song = snapshot.data;
+        if (song == null) return const SizedBox.shrink();
+        return Row(
+          children: [
+            Text(song.title),
+            IconButton(
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () => audioHandler.play(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.pause),
+              onPressed: () => audioHandler.pause(),
+            ),
+          ],
+        );
+      },
+    );
 
     return StreamBuilder<LocalSong?>(
       stream: player.currentSongStream,

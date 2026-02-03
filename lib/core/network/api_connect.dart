@@ -4,7 +4,7 @@ import 'dart:io';
 class ApiConnect {
 
 
-  static String baseUrl = 'http://10.0.2.2:3050' ;
+  static String baseUrl = 'http://192.168.0.102:3050' ;
   void verifyPlatform() { if(Platform.isLinux){
   baseUrl='http://localhost:3050';
   }
@@ -27,5 +27,18 @@ class ApiConnect {
 
     return response;
   }
+  Future<http.Response> get(
+      String path) async {
+
+    final uri = Uri.parse('$baseUrl$path');
+    final response = await http.get(
+      uri,
+        headers: {
+          'Content-Type': 'application/json'
+        });
+
+    return response;
+  }
+
 }
 

@@ -26,18 +26,27 @@ Future<List<File>> getDownloadedMp3s() async {
 Future<List<LocalSong>> getLocalSongs() async {
   final files = await getDownloadedMp3s();
 
-  for (var file in files) {
-    log('MP3: ${file.path}');
-  }
-
   return files.map((file) {
-    final name =
-    file.uri.pathSegments.last.replaceAll('.mp3', '');
+    final fileName = file.uri.pathSegments.last;
+    
+    // El formato es "videoId_NombreSanitizado.mp3"
+    // Buscamos el primer guion bajo para separar el ID del resto
+    final firstUnderscoreIndex = fileName.indexOf('_');
+    
+    String? videoId;
+    String title;
+    
+    if (firstUnderscoreIndex != -1) {
+      videoId = fileName.substring(0, firstUnderscoreIndex);
+      title = fileName.substring(firstUnderscoreIndex + 1).replaceAll('.mp3', '');
+    } else {
+      title = fileName.replaceAll('.mp3', '');
+    }
 
     return LocalSong(
-      title: name,
+      title: title,
       path: file.path,
+      videoId: videoId,
     );
   }).toList();
 }
-
