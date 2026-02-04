@@ -1,14 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 class ApiConnect {
 
 
-  static String baseUrl = 'http://192.168.0.102:3050' ;
-  void verifyPlatform() { if(Platform.isLinux){
-  baseUrl='http://localhost:3050';
-  }
-  }
+  static String baseUrl = 'http://springfy.tplinkdns.com:3051' ;
+
+
   Future<http.Response> post(
       String path,
       Map<String, dynamic> body, {
@@ -20,6 +17,7 @@ class ApiConnect {
       uri,
       headers: {
         'Content-Type': 'application/json',
+        'Application-id':'sp-rin-g-fy-id-application-android/29912/',
         if (extraHeaders != null) ...extraHeaders,
       },
       body: jsonEncode(body),
@@ -34,7 +32,9 @@ class ApiConnect {
     final response = await http.get(
       uri,
         headers: {
-          'Content-Type': 'application/json'
+
+          'Content-Type': 'application/json',
+              'Application-id':'sp-rin-g-fy-id-application-android/29912/',
         });
 
     return response;

@@ -19,7 +19,8 @@ class DownloadApi {
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Error al descargar en la nube');
+
+      throw Exception('Error al descargar en la nube: ${response.body}');
     }
 
     return jsonDecode(response.body);
