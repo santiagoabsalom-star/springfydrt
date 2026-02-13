@@ -4,18 +4,34 @@ import 'package:just_audio/just_audio.dart';
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final _player = AudioPlayer();
 
-  MyAudioHandler() {
-    // Transmitir estado a la notificación de Android y pantalla de bloqueo
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    playbackState.add(
+      playbackState.value.copyWith(
+        repeatMode: repeatMode,
+      ),
+    );
 
-    // Actualizar metadata de la notificación (título, artista)
+    await _player.setLoopMode(
+      repeatMode == AudioServiceRepeatMode.one
+          ? LoopMode.one
+          : LoopMode.all,
+    );
+  }
+
+  MyAudioHandler() {
+    _player.playbackEventStream.map(_transformEvent).listen((state) {
+      playbackState.add(state.copyWith(
+        repeatMode: playbackState.value.repeatMode,
+      ));
+    });
+
     _player.currentIndexStream.listen((index) {
       if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
         mediaItem.add(queue.value[index]);
       }
     });
 
-    // Escuchar cambios de duración para actualizar la barra de progreso en la pantalla de bloqueo
     _player.durationStream.listen((duration) {
       final item = mediaItem.value;
       if (item != null && duration != null) {
@@ -23,13 +39,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     });
 
-    // Manejar el fin de la canción
-    _player.processingStateStream.listen((state) {
+    _player.processingStateStream.listen((state) async {
       if (state == ProcessingState.completed) {
-        skipToNext();
+        final loopMode = _player.loopMode;
+
+        if (loopMode == LoopMode.one) return;
+
+
+        await skipToNext();
       }
     });
+
   }
+  Stream<bool> get isRepeatingStream =>
+      _player.loopModeStream.map((mode) => mode != LoopMode.off);
 
   @override
   Future<void> play() => _player.play();
@@ -46,15 +69,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     ));
     await super.stop();
   }
+
+  @override
+  Future<void> skipToNext() async{
+    if(_player.loopMode==LoopMode.one) {
+    _player.setLoopMode(LoopMode.all);
+    _player.seekToNext();
+    _player.setLoopMode(LoopMode.one);
+    }
+    else{
+      _player.seekToNext();
+
+    }
+
+
+  }
   
   @override
-  Future<void> skipToNext() => _player.seekToNext();
-  
-  @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async{
+    if(_player.loopMode==LoopMode.one) {
+      _player.setLoopMode(LoopMode.all);
+      _player.seekToPrevious();
+      _player.setLoopMode(LoopMode.one);
+    }
+    else{
+      _player.seekToPrevious();
+
+    }}
   
   @override
   Future<void> seek(Duration position) => _player.seek(position);
+
+
 
   Future<void> loadPlaylist(List<MediaItem> items, {int startIndex = 0}) async {
     final sources = items.map((item) {
@@ -66,14 +112,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       return AudioSource.uri(uri, tag: item);
     }).toList();
-    
+
     queue.add(items);
     
     await _player.setAudioSource(
       ConcatenatingAudioSource(children: sources),
       initialIndex: startIndex,
     );
-    
+
     play();
   }
 

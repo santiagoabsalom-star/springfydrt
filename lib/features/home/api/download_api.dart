@@ -31,10 +31,7 @@ class DownloadApi {
       '/api/download/downloadOnApp',
       {
         'videoId': videoId,
-      },
-      extraHeaders: {
-        'Accept': 'audio/mpeg',
-      },
+      }
     );
 
     if (response.statusCode != 200) {
@@ -44,13 +41,13 @@ class DownloadApi {
     return response.bodyBytes;
   }
 
-  Future<File> saveAudioFromVideo(VideoInfo video, String videoId) async {
+  Future<File> saveAudioFromVideo(VideoInfo video, String videoId, Directory directory) async {
     final bytes = await downloadOnApp(videoId);
 
     final file = await saveMp3ToStorageWithTitle(
       bytes,
       video.title,
-      videoId, // Pasamos el videoId para guardarlo en el nombre del archivo
+      videoId, directory
     );
 
     print('Guardado como: ${file.path}');

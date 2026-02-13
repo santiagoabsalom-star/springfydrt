@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:springfydrt/features/cloud/cloud.dart';
 import 'package:springfydrt/features/download/downloads.dart';
 import 'package:springfydrt/features/playerpage/playerminiglobal.dart';
+import 'package:springfydrt/features/streaming/streaming.dart';
 import '../../../home/home_page.dart';
 import '../../navigation_controller.dart';
 
@@ -29,7 +30,8 @@ class _MainPageState extends State<MainPage> {
                   children: const [
                     HomePage(),
                     CloudPage(),
-                    DownloadedSongsPage()
+                    DownloadedSongsPage(),
+                    StreamingPage()
                   ],
                 ),
               ),
@@ -37,21 +39,28 @@ class _MainPageState extends State<MainPage> {
             ],
           ),
           bottomNavigationBar: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
             currentIndex: index,
             onTap: _controller.changeTab,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: 'Home',
+                icon: Icon(Icons.search),
+                label: 'Buscar',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.cloud),
                 label: 'Cloud',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.arrow_circle_down),
-                label: 'Descargas',
-              )
+                icon: Icon(Icons.library_music),
+                label: 'Biblioteca',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.people),
+                label:'Duo'
+              ),
+
+
             ],
           ),
         );

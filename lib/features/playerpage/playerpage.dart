@@ -107,13 +107,24 @@ class _PlayerPageState extends State<PlayerPage> {
 
                 StreamBuilder<bool>(
                   stream: player.isPlayingStream,
-                  initialData: player.isPlaying,
                   builder: (context, snapshot) {
                     final playing = snapshot.data ?? false;
+
+                    return StreamBuilder<bool>(
+                      stream: player.isRepeatingStream,
+                      initialData: player.isRepeating,
+                      builder: (context, snapRepeat) {
+                        final repeating = snapRepeat.data ?? false;
+
 
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
+                        IconButton(
+                          iconSize: 25,
+                          icon: Icon(repeating ? Icons.repeat_one : Icons.repeat),
+                          onPressed: player.repeat,
+                        ),
                         IconButton(
                           iconSize: 48,
                           icon: const Icon(Icons.skip_previous),
@@ -131,7 +142,8 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                       ],
                     );
-                  },
+                  });
+                        },
                 ),
                 const Spacer(),
               ],

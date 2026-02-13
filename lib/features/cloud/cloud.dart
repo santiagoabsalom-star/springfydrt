@@ -1,3 +1,6 @@
+import 'dart:developer';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
@@ -46,9 +49,7 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   void _refreshData() {
-    setState(() {
-      _cloudSongs = _apiCloud.allOnCloud();
-    });
+    _cloudSongs = _apiCloud.allOnCloud();
     _refreshLocalSongs();
   }
 
@@ -62,50 +63,55 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   bool _isDownloaded(AudioDTO audio) {
-    // AHORA COMPARAMOS POR VIDEO ID
-    return _localSongs.any((local) => local.videoId == audio.videoId);
+    return _localSongs.any((local) => local.videoId == audio.audioId);
   }
 
-  void _downloadSong(AudioDTO audio) async {
-    if (_isDownloaded(audio) || _downloadingIds.contains(audio.videoId)) return;
+  void _downloadSong(AudioDTO audio, Directory directory) async {
+    if (directory != null) {
+      if (_isDownloaded(audio) || _downloadingIds.contains(audio.audioId))
+        return;
+      log(audio.audioId);
+      setState(() {
+        _downloadingIds.add(audio.audioId);
+      });
 
-    setState(() {
-      _downloadingIds.add(audio.videoId);
-    });
 
-    try {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Descargando ${audio.nombreAudio}...')),
+      try {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Descargando ${audio.nombreAudio}...')),
+          );
+        }
+
+        final videoInfo = VideoInfo(
+          videoId: audio.audioId,
+          title: audio.nombreAudio,
+          channelTitle: 'Cloud',
         );
-      }
 
-      final videoInfo = VideoInfo(
-        videoId: audio.videoId,
-        title: audio.nombreAudio,
-        channelTitle: 'Cloud',
-      );
+        await _downloadApi.saveAudioFromVideo(
+            videoInfo, audio.audioId, directory);
 
-      await _downloadApi.saveAudioFromVideo(videoInfo, audio.videoId);
+        DownloadsNotifier.instance.notify();
 
-      DownloadsNotifier.instance.notify();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${audio.nombreAudio} descargado con éxito')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al descargar: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _downloadingIds.remove(audio.videoId);
-        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('${audio.nombreAudio} descargado con éxito')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al descargar: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _downloadingIds.remove(audio.audioId);
+          });
+        }
       }
     }
   }
@@ -134,7 +140,9 @@ class _CloudPageState extends State<CloudPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 filled: true,
-                fillColor: Theme.of(context).cardColor,
+                fillColor: Theme
+                    .of(context)
+                    .cardColor,
               ),
             ),
           ),
@@ -152,42 +160,112 @@ class _CloudPageState extends State<CloudPage> {
           }
 
           final songs = snapshot.data!.where((song) {
-            return song.nombreAudio.toLowerCase().contains(_searchQuery.toLowerCase());
+            return song.nombreAudio.toLowerCase().contains(
+                _searchQuery.toLowerCase());
           }).toList();
 
           if (songs.isEmpty && _searchQuery.isNotEmpty) {
             return const Center(child: Text("No se encontraron coincidencias"));
           }
-
           return ListView.builder(
             itemCount: songs.length,
             itemBuilder: (context, index) {
               final song = songs[index];
               final downloaded = _isDownloaded(song);
-              final isDownloading = _downloadingIds.contains(song.videoId);
+              final isDownloading = _downloadingIds.contains(song.audioId);
 
               return ListTile(
-                leading: const Icon(Icons.cloud_queue),
-                title: Text(song.nombreAudio),
-                subtitle: Text(song.videoId),
-                trailing: isDownloading 
-                  ? const SizedBox(
-                      width: 24, 
-                      height: 24, 
+                  leading: const Icon(Icons.cloud_queue),
+                  title: Text(song.nombreAudio),
+                  subtitle: Text(song.audioId),
+                  trailing: isDownloading
+                      ? const SizedBox(
+                      width: 24,
+                      height: 24,
                       child: CircularProgressIndicator(strokeWidth: 2)
-                    )
-                  : IconButton(
-                      icon: Icon(
-                        downloaded ? Icons.check_circle : Icons.download,
-                        color: downloaded ? Colors.green : null,
-                      ),
-                      onPressed: downloaded ? null : () => _downloadSong(song),
+                  )
+                      : IconButton(
+                    icon: Icon(
+                      downloaded ? Icons.check_circle : Icons.download,
+                      color: downloaded ? Colors.green : null,
                     ),
-              );
+                    onPressed: downloaded ? null : () =>
+                        openDownloadDialog().then(
+                              (directory) => _downloadSong(song, directory!),
+
+                        ),
+                  ));
             },
           );
         },
       ),
     );
   }
+
+  Future<Directory?> openDownloadDialog() {
+    return showDialog<Directory>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Guardar en playlist",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Expanded(
+                    child: FutureBuilder<List<Directory>>(
+                      future: getDirectoriesOnFolder(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        final folders = snapshot.data!;
+                        if (folders.isEmpty) {
+                          return const Center(child: Text("No hay playlist, crea una para guardar la cancion"));
+                        }
+
+                        return ListView.builder(
+                          itemCount: folders.length,
+                          itemBuilder: (context, index) {
+                            final folder = folders[index];
+                            final folderName = folder.path.split('/').last;
+
+                            return ListTile(
+                              leading: const Icon(Icons.folder),
+                              title: Text(folderName),
+                              onTap: () => Navigator.pop(context, folder),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancelar"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
 }

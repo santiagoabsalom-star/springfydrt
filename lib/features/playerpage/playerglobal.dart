@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart' as audioplayers;
 import 'package:rxdart/rxdart.dart';
-import '../../main.dart'; // Para acceder a audioHandler
-
+import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
 
 class GlobalAudioPlayer {
@@ -45,24 +45,27 @@ class GlobalAudioPlayer {
       }
     });
 
-    _player.playerCompletionStream.listen((_) {
-      next();
+    _player.playerCompletionStream.listen((_) async {
+      if (_player._isRepeating) {
+        return;
+      }
+       next();
     });
+//TODO: hacer que reproducir la lista entera sea lo normal
 
-    // Sincronizar el estado del audioHandler con el sujeto local para la UI
     if (Platform.isAndroid) {
       audioHandler.mediaItem.listen((item) {
         if (item != null) {
           final song = _currentPlaylist.firstWhere(
             (s) => s.path == item.id,
-            orElse: () => LocalSong(title: item.title, path: item.id),
+            orElse: () => LocalSong(title: item.title, path: item.id, videoId: item.displayTitle as String),
           );
           _currentSongSubject.add(song);
         }
       });
     }
   }
-
+  bool get isRepeating => _player._isRepeating;
   void _updateDurationState() {
     if (!_durationStateSubject.isClosed) {
       final newState = currentDurationState;
@@ -81,8 +84,11 @@ class GlobalAudioPlayer {
   Stream<bool> get isPlayingStream =>
       _player.playingStream.startWith(_player.isPlaying).distinct();
 
-  bool get isPlaying => _player.isPlaying;
+  Stream<bool> get isRepeatingStream=>
+  _player.isRepeatingStream;
+
   int get currentIndex => _currentIndex;
+
 
   Future<void> setPlaylist(
     List<LocalSong> songs, {
@@ -101,7 +107,7 @@ class GlobalAudioPlayer {
         id: s.path,
         album: "Local",
         title: s.title,
-        artist: "Desconocido",
+        artist: "Soy todos: Santi",
       )).toList();
       await audioHandler.loadPlaylist(mediaItems, startIndex: startIndex);
     } else {
@@ -130,7 +136,8 @@ class GlobalAudioPlayer {
 
   void next() {
     if (Platform.isAndroid) {
-      audioHandler.skipToNext();
+     audioHandler.skipToNext();
+
     } else if (_currentIndex + 1 < _currentPlaylist.length) {
       _currentIndex++;
       _playIndex(_currentIndex);
@@ -139,13 +146,20 @@ class GlobalAudioPlayer {
 
   void previous() {
     if (Platform.isAndroid) {
-      audioHandler.skipToPrevious();
+
+
+        audioHandler.skipToPrevious();
+
+
+
     } else if (_currentIndex - 1 >= 0) {
       _currentIndex--;
       _playIndex(_currentIndex);
     }
   }
-
+void repeat(){
+    _player.repeat();
+}
   void dispose() {
     _player.dispose();
     _currentSongSubject.close();
@@ -166,8 +180,8 @@ abstract class AppAudioPlayer {
     } else {
       return AndroidAudioPlayer();
     }
-  }
-
+  }bool _isRepeating = false;
+  Stream<bool> get isRepeatingStream;
   Stream<Duration> get positionStream;
   Stream<Duration?> get durationStream;
   Stream<bool> get playingStream;
@@ -176,22 +190,32 @@ abstract class AppAudioPlayer {
   Duration get position;
   Duration? get duration;
 
+
   Future<void> playFile(String path);
   Future<void> pause();
   Future<void> resume();
   Future<void> stop();
   Future<void> seek(Duration position);
   Future<void> dispose();
+  Future<void> repeat();
 }
 
 class AndroidAudioPlayer implements AppAudioPlayer {
-  // Usamos el audioHandler global en lugar de una instancia privada de just_audio
-  
-  @override
+@override
+  bool get _isRepeating => audioHandler.playbackState.value.repeatMode == AudioServiceRepeatMode.one;
+
+@override
+Stream<bool> get isRepeatingStream =>
+    audioHandler.playbackState
+        .map((s) => s.repeatMode == AudioServiceRepeatMode.one)
+        .distinct();
+
+@override
   Stream<Duration> get positionStream => AudioService.position;
 
   @override
   Stream<Duration?> get durationStream => audioHandler.mediaItem.map((item) => item?.duration);
+
 
   @override
   Stream<bool> get playingStream => audioHandler.playbackState.map((state) => state.playing);
@@ -199,7 +223,7 @@ class AndroidAudioPlayer implements AppAudioPlayer {
   @override
   Stream<void> get playerCompletionStream => audioHandler.playbackState
       .where((state) => state.processingState == AudioProcessingState.completed)
-      .map((_) => null);
+      .map((_) {});
 
   @override
   bool get isPlaying => audioHandler.playbackState.value.playing;
@@ -229,11 +253,37 @@ class AndroidAudioPlayer implements AppAudioPlayer {
 
   @override
   Future<void> dispose() async {
-    // El handler es global, no lo destruimos aquí
+
   }
+@override
+Future<void> repeat() async {
+  final current = audioHandler.playbackState.value.repeatMode;
+
+  final next = (current == AudioServiceRepeatMode.one)
+
+      ? AudioServiceRepeatMode.none
+      : AudioServiceRepeatMode.one
+
+  ;
+
+  await audioHandler.setRepeatMode(next);
+}
+
+  @override
+  set _isRepeating(bool value) {
+    // TODO: implement _isRepeating
+  }
+
+
+
 }
 
 class LinuxAudioPlayer implements AppAudioPlayer {
+
+@override
+  bool _isRepeating = false;
+  final StreamController<bool> _isRepeatingController =
+  StreamController<bool>.broadcast();
   final audioplayers.AudioPlayer _player = audioplayers.AudioPlayer();
 
   Duration _position = Duration.zero;
@@ -243,7 +293,8 @@ class LinuxAudioPlayer implements AppAudioPlayer {
     _player.onPositionChanged.listen((p) => _position = p);
     _player.onDurationChanged.listen((d) => _duration = d);
   }
-
+  @override
+  Stream<bool> get isRepeatingStream => _isRepeatingController.stream;
   @override
   Stream<Duration> get positionStream => _player.onPositionChanged;
 
@@ -266,10 +317,15 @@ class LinuxAudioPlayer implements AppAudioPlayer {
   @override
   Duration? get duration => _duration;
 
-  @override
-  Future<void> playFile(String path) async {
-    await _player.play(audioplayers.DeviceFileSource(path));
-  }
+@override
+Future<void> playFile(String path) async {
+  await _player.setReleaseMode(
+    _isRepeating ? audioplayers.ReleaseMode.loop : audioplayers.ReleaseMode.release,
+  );
+
+  await _player.play(audioplayers.DeviceFileSource(path));
+}
+
 
   @override
   Future<void> pause() => _player.pause();
@@ -284,5 +340,20 @@ class LinuxAudioPlayer implements AppAudioPlayer {
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await _player.dispose();
+    await _isRepeatingController.close();
+  }
+  @override
+  Future<void> repeat() async {
+    log("Repeating on this fukin method");
+    _isRepeating = !_isRepeating;
+    log("value de repeating: $_isRepeating");
+    await _player.setReleaseMode(
+      _isRepeating ? audioplayers.ReleaseMode.loop : audioplayers.ReleaseMode.release,
+    );
+    _isRepeatingController.add(_isRepeating);
+  }
+
 }
+

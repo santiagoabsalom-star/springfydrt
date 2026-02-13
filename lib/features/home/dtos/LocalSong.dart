@@ -1,11 +1,21 @@
 class LocalSong {
-  final String title;
-  final String path;
-  final String? videoId;
+  late final String title;
+  late  String path;
+  late final String? videoId;
 
   LocalSong({
     required this.title,
     required this.path,
-    this.videoId,
+    required this.videoId,
   });
+  void setVideoId(String videoId) {
+    this.videoId = videoId;}
+  void setPath(String path) {
+    this.path = path;
+  }
+  void setTitle(String title) {
+    this.title = title;
+  }
+
+
 }

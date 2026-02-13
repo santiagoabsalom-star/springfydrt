@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
-import '../../main.dart'; // Para acceder a audioHandler
+import '../../core/directories.dart';
+import '../../main.dart';
 import '../../core/network/api_connect.dart';
 import '../notifier/notifier.dart';
 import 'api/download_api.dart';
@@ -45,7 +47,7 @@ class _HomePageState extends State<HomePage> {
 
   void _playSong(int index) {
     final mediaItems = _results.map((v) => MediaItem(
-      id: '${ApiConnect.baseUrl}/api/download/downloadOnApp?videoId=${v.videoId}', // Asumiendo GET para streaming
+      id: '${ApiConnect.baseUrl}/api/download/downloadOnApp?videoId=${v.videoId}',
       album: "Springfy",
       title: v.title,
       artist: v.channelTitle,
@@ -77,12 +79,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text(
-              _query.isEmpty ? 'Explorar' : 'Resultados',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
                 itemCount: _results.length,
@@ -95,11 +91,14 @@ class _HomePageState extends State<HomePage> {
                     onTap: () => _playSong(index),
                     onCloudDownload: () async {
                       await _downloadApi.downloadOnCloud(video.videoId);
-                      CloudNotifier.instance.notify(); // Notificar a la nube
+                      CloudNotifier.instance.notify();
                       setState(() => _cloudDownloaded.add(video.videoId));
                     },
                     onLocalDownload: () async {
-                      await _downloadApi.saveAudioFromVideo(video, video.videoId);
+                    openDownloadDialog().then(
+                          (directory) async => await _downloadApi.saveAudioFromVideo(video, video.videoId, directory!)
+
+                    );
                       DownloadsNotifier.instance.notify();
                       setState(() => _localDownloaded.add(video.videoId));
                     },
@@ -110,6 +109,71 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+  }
+  Future<Directory?> openDownloadDialog() {
+    return showDialog<Directory>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Guardar en playlist",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Expanded(
+                    child: FutureBuilder<List<Directory>>(
+                      future: getDirectoriesOnFolder(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        final folders = snapshot.data!;
+                        if (folders.isEmpty) {
+                          return const Center(child: Text("No hay playlist, crea una para guardar la cancion"));
+                        }
+
+                        return ListView.builder(
+                          itemCount: folders.length,
+                          itemBuilder: (context, index) {
+                            final folder = folders[index];
+                            final folderName = folder.path.split('/').last;
+
+                            return ListTile(
+                              leading: const Icon(Icons.folder),
+                              title: Text(folderName),
+                              onTap: () => Navigator.pop(context, folder),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancelar"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -138,8 +202,8 @@ class _SearchResultTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        onTap: onTap,
-        leading: const CircleAvatar(child: Icon(Icons.play_arrow)),
+
+        leading: const CircleAvatar(child: Icon(Icons.music_note_outlined)),
         title: Text(video.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(video.channelTitle),
         trailing: Row(
@@ -152,10 +216,12 @@ class _SearchResultTile extends StatelessWidget {
             IconButton(
               icon: Icon(Icons.download, color: localDownloaded ? Colors.green : null),
               onPressed: cloudDownloaded && !localDownloaded ? onLocalDownload : null,
-            ),
+            )
+
           ],
         ),
       ),
     );
   }
+
 }

@@ -11,6 +11,7 @@ class DownloadsNotifier extends ChangeNotifier {
   }
 }
 
+
 class CloudNotifier extends ChangeNotifier {
   CloudNotifier._();
   static final instance = CloudNotifier._();

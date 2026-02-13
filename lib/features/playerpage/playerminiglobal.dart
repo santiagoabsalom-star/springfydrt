@@ -49,67 +49,82 @@ class MiniPlayer extends StatelessWidget {
 
             return StreamBuilder<bool>(
               stream: player.isPlayingStream,
-              initialData: player.isPlaying,
+
               builder: (context, playSnap) {
                 final playing = playSnap.data ?? false;
 
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlayerPage(
-                          playlist: player.currentPlaylist,
-                          initialIndex: player.currentIndex,
-                          isOpeningFromMiniPlayer: true,
+                return StreamBuilder(stream: player.isRepeatingStream,initialData: player.isRepeating, builder:(context, repeatSnap) {
+                  final repeating = repeatSnap.data ?? false;
+
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PlayerPage(
+                                playlist: player.currentPlaylist,
+                                initialIndex: player.currentIndex,
+                                isOpeningFromMiniPlayer: true,
+                              ),
                         ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    height: 70,
-                    color: Theme.of(context).cardColor,
-                    child: Column(
-                      children: [
-                        LinearProgressIndicator(
-                          value: total.inMilliseconds == 0
-                              ? 0
-                              : (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0),
-                          minHeight: 2,
-                        ),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 12),
-                              const Icon(Icons.music_note),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  song.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.skip_previous),
-                                onPressed: player.previous,
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  playing ? Icons.pause : Icons.play_arrow,
-                                ),
-                                onPressed: player.toggle,
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.skip_next),
-                                onPressed: player.next,
-                              ),
-                            ],
+                      );
+                    },
+                    child: Container(
+                      height: 70,
+                      color: Theme
+                          .of(context)
+                          .cardColor,
+                      child: Column(
+                        children: [
+                          LinearProgressIndicator(
+                            value: total.inMilliseconds == 0
+                                ? 0
+                                : (position.inMilliseconds /
+                                total.inMilliseconds).clamp(0.0, 1.0),
+                            minHeight: 2,
                           ),
-                        ),
-                      ],
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 12),
+                                const Icon(Icons.music_note),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    song.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+
+                                IconButton(
+                                  icon: Icon(repeating ? Icons.repeat_one : Icons.repeat),
+                                    onPressed: player.repeat,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.skip_previous),
+
+                                  onPressed: player.previous,
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    playing ? Icons.pause : Icons.play_arrow,
+                                  ),
+                                  onPressed: player.toggle,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.skip_next),
+                                  onPressed: player.next,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  );
+                },
                 );
               },
             );
