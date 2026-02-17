@@ -8,6 +8,7 @@ class SearchApi {
   Future<SongDto> searchByName(String name) async {
     final response = await _api.post(
       '/api/search/by-name',
+      true,
       {
         'name': name,
       },

@@ -154,7 +154,7 @@ Future<List<LocalSong>> getLocalSongs() async {
       path: file.path,
       videoId: videoId,
     );
-  }).toList();
+  }).toList();// importante, TENGO QUE REVISAR:D
 }
 
 

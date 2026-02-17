@@ -1,7 +1,9 @@
 
+import 'dart:ffi';
+
 class ComandoDTO {
   final String comando;
-  final int segundos;
+  final Long segundos;
   final String musicId;
 
   ComandoDTO({

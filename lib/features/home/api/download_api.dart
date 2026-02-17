@@ -13,6 +13,7 @@ class DownloadApi {
   Future<Map<String, dynamic>> downloadOnCloud(String videoId) async {
     final response = await _api.post(
       '/api/download/downloadOnCloud',
+      true,
       {
         'videoId': videoId,
       },
@@ -29,6 +30,7 @@ class DownloadApi {
   Future<Uint8List> downloadOnApp(String videoId) async {
     final response = await _api.post(
       '/api/download/downloadOnApp',
+        true,
       {
         'videoId': videoId,
       }
