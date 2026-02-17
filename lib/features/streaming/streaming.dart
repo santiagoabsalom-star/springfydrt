@@ -9,6 +9,7 @@ import 'package:springfydrt/features/streaming/dto/comando.dart';
 import 'package:web_socket_channel/io.dart';
 
 import '../cloud/api/api_cloud.dart';
+import 'api/p_c_m_player.dart';
 
 class StreamingPage extends StatefulWidget {
   const StreamingPage({super.key});
@@ -23,6 +24,7 @@ class _StreamingPageState extends State<StreamingPage>{
   final isListening = ValueNotifier<bool>(false);
   bool isListeningbool=false;
   late String usuarioActual;
+  final PcmPlayer _pcmPlayer = PcmPlayer();
   @override
   void initState(){
     super.initState();
@@ -96,8 +98,8 @@ class _StreamingPageState extends State<StreamingPage>{
           valueListenable: isListening,
           builder: (context, value, child) {
 //construir una ui linda para que no vaya mal
-            return value ? Text("Nadie esta conectado"
-            ) : Text("El otro se conecto");
+            return value ? Text("El otro se conecto"
+            ) : Text("Nadie esta conectado");
 
           },
         )

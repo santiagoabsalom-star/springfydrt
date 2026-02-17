@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -28,6 +29,17 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkLogin() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      if (!mounted) return;
+      // Offline: go to main page, don't show login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainPage()),
+      );
+      return;
+    }
+
     final logged = await isLogged();
 
     if (!mounted) return;
@@ -73,10 +85,6 @@ class _SplashScreenState extends State<SplashScreen> {
         id: response.id ?? 0,
       );
       return true;
-
-
-
-
     }catch(e){
       log("Error leyendo $e");
       return false;

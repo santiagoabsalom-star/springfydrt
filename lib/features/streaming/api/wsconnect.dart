@@ -8,9 +8,8 @@ Map<String, String> applicationHeader= {
 
 Future<IOWebSocketChannel> connect(Map<String,String> headers) async {
   headers.addAll(applicationHeader);
-final channel = IOWebSocketChannel.connect(streamUri, headers: headers);
+return IOWebSocketChannel.connect(streamUri, headers: headers);
 
-return channel;
 
 }
 
