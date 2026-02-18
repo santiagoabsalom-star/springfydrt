@@ -51,9 +51,12 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
+
       valueListenable: _controller,
       builder: (context, index, _) {
+
         return Scaffold(
+
           body: Column(
             children: [
               Expanded(
