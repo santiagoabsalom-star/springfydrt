@@ -5,7 +5,7 @@ import '../../features/login/api/token.dart';
 class ApiConnect {
 
 
-  static String baseUrl = 'http://springfy.tplinkdns.com:3051' ;
+  static String baseUrl = 'http://springfy.tplinkdns.com:3051';
 
 
   Future<http.Response> post(

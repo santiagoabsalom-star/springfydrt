@@ -3,7 +3,18 @@ import 'package:just_audio/just_audio.dart';
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final _player = AudioPlayer();
+  Future<void> reset() async {
+    await _player.stop();
+    await _player.setAudioSource(ConcatenatingAudioSource(children: []));
 
+    queue.add([]);
+    mediaItem.add(null);
+
+    playbackState.add(playbackState.value.copyWith(
+      playing: false,
+      processingState: AudioProcessingState.idle,
+    ));
+  }
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     playbackState.add(

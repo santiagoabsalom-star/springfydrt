@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -28,9 +30,8 @@ class TokenStorage {
     await _storage.delete(key: _keyUsername);
     await _storage.delete(key: _keyUserId);
   }
-  static Future<String?> getUsernameFromToken(String token) async{
-    final decoded = JwtDecoder.decode(token);
-
-    return decoded["username"] as String;
+  static Future<String?> getUsername() async {
+    return await _storage.read(key: _keyUsername);
   }
+
 }

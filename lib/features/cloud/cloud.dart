@@ -75,7 +75,6 @@ class _CloudPageState extends State<CloudPage> {
         _downloadingIds.add(audio.audioId);
       });
 
-
       try {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -90,21 +89,25 @@ class _CloudPageState extends State<CloudPage> {
         );
 
         await _downloadApi.saveAudioFromVideo(
-            videoInfo, audio.audioId, directory);
+          videoInfo,
+          audio.audioId,
+          directory,
+        );
 
         DownloadsNotifier.instance.notify();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('${audio.nombreAudio} descargado con éxito')),
+              content: Text('${audio.nombreAudio} descargado con éxito'),
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al descargar: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error al descargar: $e')));
         }
       } finally {
         if (mounted) {
@@ -122,10 +125,7 @@ class _CloudPageState extends State<CloudPage> {
       appBar: AppBar(
         title: const Text("Cloud Songs"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
@@ -140,9 +140,7 @@ class _CloudPageState extends State<CloudPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 filled: true,
-                fillColor: Theme
-                    .of(context)
-                    .cardColor,
+                fillColor: Theme.of(context).cardColor,
               ),
             ),
           ),
@@ -161,7 +159,8 @@ class _CloudPageState extends State<CloudPage> {
 
           final songs = snapshot.data!.where((song) {
             return song.nombreAudio.toLowerCase().contains(
-                _searchQuery.toLowerCase());
+              _searchQuery.toLowerCase(),
+            );
           }).toList();
 
           if (songs.isEmpty && _searchQuery.isNotEmpty) {
@@ -175,26 +174,27 @@ class _CloudPageState extends State<CloudPage> {
               final isDownloading = _downloadingIds.contains(song.audioId);
 
               return ListTile(
-                  leading: const Icon(Icons.cloud_queue),
-                  title: Text(song.nombreAudio),
-                  subtitle: Text(song.audioId),
-                  trailing: isDownloading
-                      ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2)
-                  )
-                      : IconButton(
-                    icon: Icon(
-                      downloaded ? Icons.check_circle : Icons.download,
-                      color: downloaded ? Colors.green : null,
-                    ),
-                    onPressed: downloaded ? null : () =>
-                        openDownloadDialog().then(
-                              (directory) => _downloadSong(song, directory!),
-
+                leading: const Icon(Icons.cloud_queue),
+                title: Text(song.nombreAudio),
+                subtitle: Text(song.audioId),
+                trailing: isDownloading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        icon: Icon(
+                          downloaded ? Icons.check_circle : Icons.download,
+                          color: downloaded ? Colors.green : null,
                         ),
-                  ));
+                        onPressed: downloaded
+                            ? null
+                            : () => openDownloadDialog().then(
+                                (directory) => _downloadSong(song, directory!),
+                              ),
+                      ),
+              );
             },
           );
         },
@@ -225,12 +225,18 @@ class _CloudPageState extends State<CloudPage> {
                       future: getDirectoriesOnFolder(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
 
                         final folders = snapshot.data!;
                         if (folders.isEmpty) {
-                          return const Center(child: Text("No hay playlist, crea una para guardar la cancion"));
+                          return const Center(
+                            child: Text(
+                              "No hay playlist, crea una para guardar la cancion",
+                            ),
+                          );
                         }
 
                         return ListView.builder(
@@ -267,5 +273,4 @@ class _CloudPageState extends State<CloudPage> {
       },
     );
   }
-
 }

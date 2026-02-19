@@ -253,7 +253,7 @@ Stream<bool> get isRepeatingStream =>
 
   @override
   Future<void> dispose() async {
-
+    audioHandler.reset();
   }
 @override
 Future<void> repeat() async {

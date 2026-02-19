@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:springfydrt/features/notifier/notifier.dart';
 import 'package:springfydrt/features/playerpage/playerglobal.dart';
 import '../home/dtos/LocalSong.dart';
 
@@ -24,6 +25,8 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    PlayerNotifier.instance.addListener(quitar);
+
     if (!widget.isOpeningFromMiniPlayer) {
       player.setPlaylist(
         widget.playlist,
@@ -31,7 +34,9 @@ class _PlayerPageState extends State<PlayerPage> {
       );
     }
   }
-
+  Future<void> quitar()async{
+    player.dispose();
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
