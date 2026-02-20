@@ -10,8 +10,7 @@ Future<File> saveMp3ToStorageWithTitle(
 
 
 
-
-  final filePath = '${directory.path}/$title.mp3';
+  final filePath = '${directory.path}/$title';
 
   final file = File(filePath);
 

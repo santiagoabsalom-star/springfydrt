@@ -63,7 +63,11 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   bool _isDownloaded(AudioDTO audio) {
-    return _localSongs.any((local) => local.videoId == audio.audioId);
+    if(_localSongs.isEmpty) return false;
+    return _localSongs.any((song) => song.videoId == audio.audioId);
+
+
+
   }
 
   void _downloadSong(AudioDTO audio, Directory directory) async {
@@ -95,7 +99,7 @@ class _CloudPageState extends State<CloudPage> {
         );
 
         DownloadsNotifier.instance.notify();
-
+        StreamFolderNotifier.instance.notify();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -190,9 +194,14 @@ class _CloudPageState extends State<CloudPage> {
                         ),
                         onPressed: downloaded
                             ? null
-                            : () => openDownloadDialog().then(
-                                (directory) => _downloadSong(song, directory!),
-                              ),
+                            : () {
+
+                          openDownloadDialog().then(
+
+                                (directory) => {
+
+                                  _downloadSong(song, directory!)},
+                              );},
                       ),
               );
             },
@@ -248,7 +257,10 @@ class _CloudPageState extends State<CloudPage> {
                             return ListTile(
                               leading: const Icon(Icons.folder),
                               title: Text(folderName),
-                              onTap: () => Navigator.pop(context, folder),
+                              onTap: ()
+                              {
+
+                                Navigator.pop(context, folder);},
                             );
                           },
                         );

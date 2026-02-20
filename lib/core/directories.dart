@@ -75,7 +75,7 @@ Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
   return files.map((file) {
     final fileName = p.basename(file.path);
 
-    final match = RegExp(r'\[([^\]]+)\]').firstMatch(fileName);
+    final match = RegExp(r'\[([a-zA-Z0-9_-]{11})\](?=\.mp3$)').firstMatch(fileName);
 
     final videoId = match?.group(1);
 
@@ -99,9 +99,12 @@ Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
 Future<void> moveFile(LocalSong song, Directory destinationFolder) async {
     final file = File(song.path);
     try{
+      final fileName = file.uri.pathSegments.last;
 
-      await file.rename('${destinationFolder.path}/${song.title}.mp3');
-      song.path='${destinationFolder.path}/${song.title}.mp3';
+      await file.rename('${destinationFolder.path}/$fileName');
+
+
+      song.path='${destinationFolder.path}/$fileName';
       log('Song movida con exito');
     }catch(e){
       log("Ha habido un error $e");
@@ -135,11 +138,9 @@ Future<List<LocalSong>> getLocalSongs() async {
 
   return files.map((file) {
     final fileName = p.basename(file.path);
-
-    final match = RegExp(r'\[([^\]]+)\]').firstMatch(fileName);
-
+    log(fileName);
+    final match = RegExp(r'\[([a-zA-Z0-9_-]{11})\](?=\.mp3$)').firstMatch(fileName);
     final videoId = match?.group(1);
-
     String title = fileName;
 
     if (videoId != null) {
@@ -206,7 +207,7 @@ Future<List<LocalSong>> loadSongsFromFolderOrdered(Directory folder) async {
   List<LocalSong> songs = mp3Files.map((file) {
     final fileName = p.basename(file.path);
 
-    final match = RegExp(r'\[([^\]]+)\]').firstMatch(fileName);
+    final match = RegExp(r'\[([a-zA-Z0-9_-]{11})\](?=\.mp3$)').firstMatch(fileName);
 
     final videoId = match?.group(1);
 

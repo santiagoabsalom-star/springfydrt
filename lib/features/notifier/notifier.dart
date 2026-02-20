@@ -33,10 +33,21 @@ void notify() {
 }
 class PlayerNotifier extends ChangeNotifier {
   PlayerNotifier._();
+
   static final instance = PlayerNotifier._();
 
   void notify() {
     log('Notificando cambio en el reproductor');
     notifyListeners();
+  }
+
+}
+  class StreamFolderNotifier extends ChangeNotifier {
+  StreamFolderNotifier._();
+  static final instance = StreamFolderNotifier._();
+
+  void notify() {
+  log('Notificando cambio en el folder stream');
+  notifyListeners();
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -52,7 +53,7 @@ class DownloadApi {
       videoId, directory
     );
 
-    print('Guardado como: ${file.path}');
+    log('Guardado como: ${file.path}');
     return file;
   }
 
