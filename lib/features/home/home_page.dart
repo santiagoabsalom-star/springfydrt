@@ -72,7 +72,7 @@ class _HomePageState extends State<HomePage> {
                 hintText: '¿Qué quieres escuchar?',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
-                fillColor: Colors.grey.shade200,
+                fillColor: Theme.of(context).cardColor,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,

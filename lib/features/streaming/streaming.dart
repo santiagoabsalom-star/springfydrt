@@ -91,7 +91,6 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     StreamNotifier.instance.removeListener(disconnect);
     _stateController.close();
     _pcmPlayer.close();
-    _stateController.close();
     super.dispose();
   }
 
@@ -349,7 +348,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         break;
 
       case 'disconnect':
-        await _pcmPlayer.close();
+        await _pcmPlayer.stop();
         setState(() {
           _currentSong = null;
           _hostUser = null;
@@ -535,7 +534,13 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
 
     await _pcmPlayer.close();
 
-    await _channel?.sink.close();
+    setState(() {
+      _currentSong = null;
+      _hostUser = null;
+      _isFollowerConnected = false;
+      _currentSongIndex = null;
+    });
+    _emitState(DuoState.none);
   }
 
   @override
