@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../core/directories.dart';
 import '../home/dtos/LocalSong.dart';
 import '../notifier/notifier.dart';
-import '../playerpage/playerglobal.dart';
 import '../playerpage/playerpage.dart';
 
 class DownloadedSongsPage extends StatefulWidget {
@@ -23,7 +22,7 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> {
   bool loading = true;
 
   late Future<List<LocalSong>> songs;
-  final player = GlobalAudioPlayer.instance;
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   late TextEditingController createDirController = TextEditingController();

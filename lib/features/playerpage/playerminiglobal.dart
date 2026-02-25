@@ -1,137 +1,150 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:springfydrt/features/playerpage/playerpage.dart';
 import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
-import 'playerglobal.dart';
-import 'playerpage.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final player = GlobalAudioPlayer.instance;
-
-    StreamBuilder<MediaItem?>(
+    return StreamBuilder<MediaItem?>(
       stream: audioHandler.mediaItem,
-      builder: (context, snapshot) {
-        final song = snapshot.data;
-        if (song == null) return const SizedBox.shrink();
-        return Row(
-          children: [
-            Text(song.title),
-            IconButton(
-              icon: const Icon(Icons.play_arrow),
-              onPressed: () => audioHandler.play(),
-            ),
-            IconButton(
-              icon: const Icon(Icons.pause),
-              onPressed: () => audioHandler.pause(),
-            ),
-          ],
-        );
-      },
-    );
+      builder: (context, mediaItemSnapshot) {
+        final mediaItem = mediaItemSnapshot.data;
 
-    return StreamBuilder<LocalSong?>(
-      stream: player.currentSongStream,
-      initialData: player.currentSong,
-      builder: (context, songSnap) {
-        final song = songSnap.data;
-        if (song == null) return const SizedBox();
 
-        return StreamBuilder<DurationState>(
-          stream: player.durationState,
-          initialData: player.currentDurationState,
-          builder: (context, durSnap) {
-            final state = durSnap.data;
-            final position = state?.position ?? Duration.zero;
-            final total = state?.total ?? Duration.zero;
+        return StreamBuilder<PlaybackState>(
+          stream: audioHandler.playbackState,
+          builder: (context, playbackStateSnapshot) {
+            final playbackState = playbackStateSnapshot.data;
+            final isPlaying = playbackState?.playing ?? false;
+            final int? currentIndex = playbackState?.queueIndex;
+            final List<LocalSong> currentPlaylist = getCurrentPlayList();
+            final processingState = playbackState?.processingState ?? AudioProcessingState.idle;
 
-            return StreamBuilder<bool>(
-              stream: player.isPlayingStream,
+            final position = playbackState?.position;
+            final duration = mediaItem?.duration ?? Duration.zero;
+            if (mediaItem == null ||
+                processingState == AudioProcessingState.idle) {
+              return const SizedBox.shrink();
+            }
 
-              builder: (context, playSnap) {
-                final playing = playSnap.data ?? false;
 
-                return StreamBuilder(stream: player.isRepeatingStream,initialData: player.isRepeating, builder:(context, repeatSnap) {
-                  final repeating = repeatSnap.data ?? false;
-
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PlayerPage(
-                                playlist: player.currentPlaylist,
-                                initialIndex: player.currentIndex,
-                                isOpeningFromMiniPlayer: true,
-                              ),
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PlayerPage(
+                          playlist: currentPlaylist,
+                          initialIndex: currentIndex,
+                          isOpeningFromMiniPlayer: true,
                         ),
-                      );
-                    },
-                    child: Container(
-                      height: 70,
-                      color: Theme
-                          .of(context)
-                          .cardColor,
-                      child: Column(
+                  ),
+                );
+              },
+              child: Container(
+                height: 65,
+                color: Theme
+                    .of(context)
+                    .colorScheme
+                    .surface
+                    .withOpacity(0.98),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+
+                    LinearProgressIndicator(
+                      value: (duration.inMilliseconds == 0 ||
+                          position!.inMilliseconds > duration.inMilliseconds)
+                          ? 0.0
+                          : position.inMilliseconds / duration.inMilliseconds,
+                      minHeight: 2.5,
+                      backgroundColor: Colors.grey.withOpacity(0.3),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme
+                              .of(context)
+                              .colorScheme
+                              .primary),
+                    ),
+                    Expanded(
+                      child: Row(
                         children: [
-                          LinearProgressIndicator(
-                            value: total.inMilliseconds == 0
-                                ? 0
-                                : (position.inMilliseconds /
-                                total.inMilliseconds).clamp(0.0, 1.0),
-                            minHeight: 2,
-                          ),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.music_note, size: 30),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const SizedBox(width: 12),
-                                const Icon(Icons.music_note),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    song.title,
+                                Text(
+                                  mediaItem.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15),
+                                ),
+                                if (mediaItem.artist != null)
+                                  Text(
+                                    mediaItem.artist!,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme
+                                            .of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.color),
                                   ),
-                                ),
-
-                                IconButton(
-                                  icon: Icon(repeating ? Icons.repeat_one : Icons.repeat),
-                                    onPressed: player.repeat,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.skip_previous),
-
-                                  onPressed: player.previous,
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    playing ? Icons.pause : Icons.play_arrow,
-                                  ),
-                                  onPressed: player.toggle,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.skip_next),
-                                  onPressed: player.next,
-                                ),
                               ],
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.skip_previous),
+                            onPressed: audioHandler.skipToPrevious,
+                          ),
+                          IconButton(
+                            iconSize: 36.0,
+                            icon: Icon(
+                              isPlaying ? Icons.pause_circle_filled : Icons
+                                  .play_circle_filled,
+                            ),
+                            onPressed:
+                            isPlaying ? audioHandler.pause : audioHandler.play,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.skip_next),
+                            onPressed: audioHandler.skipToNext,
+                          ),
+                          const SizedBox(width: 8),
                         ],
                       ),
                     ),
-                  );
-                },
-                );
-              },
+                  ],
+                ),
+              ),
             );
           },
         );
       },
     );
+  }
+
+  List<LocalSong> getCurrentPlayList() {
+    return audioHandler.queue.value
+        .map((mediaItem) =>
+        LocalSong(
+          title: mediaItem.title,
+          path: mediaItem.id,
+
+          videoId: mediaItem.displayTitle ?? '',
+        ))
+        .toList();
   }
 }

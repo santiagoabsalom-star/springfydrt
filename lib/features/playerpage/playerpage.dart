@@ -1,17 +1,18 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
-import 'package:springfydrt/features/playerpage/playerglobal.dart';
+import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
 
 class PlayerPage extends StatefulWidget {
   final List<LocalSong> playlist;
-  final int initialIndex;
+  final int? initialIndex;
   final bool isOpeningFromMiniPlayer;
 
   const PlayerPage({
     super.key,
     required this.playlist,
-    required this.initialIndex,
+    this.initialIndex,
     this.isOpeningFromMiniPlayer = false,
   });
 
@@ -20,23 +21,38 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  final player = GlobalAudioPlayer.instance;
-
   @override
   void initState() {
     super.initState();
-    PlayerNotifier.instance.addListener(quitar);
+    PlayerNotifier.instance.addListener(_onDuoModeStarted);
 
     if (!widget.isOpeningFromMiniPlayer) {
-      player.setPlaylist(
-        widget.playlist,
-        startIndex: widget.initialIndex,
-      );
+      final mediaItems = widget.playlist.map((song) => MediaItem(
+        id: song.path,
+        title: song.title,
+        artist: "Nigga",
+        extras: {'videoId': song.videoId},
+      )).toList();
+
+      if (mediaItems.isNotEmpty) {
+        audioHandler.loadPlaylist(mediaItems, startIndex: widget.initialIndex ?? 0);
+      }
     }
   }
-  Future<void> quitar()async{
-    player.dispose();
+
+  void _onDuoModeStarted() {
+    audioHandler.stop();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
+
+  @override
+  void dispose() {
+    PlayerNotifier.instance.removeListener(_onDuoModeStarted);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,50 +63,54 @@ class _PlayerPageState extends State<PlayerPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: StreamBuilder<LocalSong?>(
-        stream: player.currentSongStream,
-        initialData: player.currentSong,
-        builder: (context, songSnapshot) {
-          final song = songSnapshot.data;
-          if (song == null) return const Center(child: Text("No hay canción seleccionada"));
+      body: StreamBuilder<MediaItem?>(
+        stream: audioHandler.mediaItem,
+        builder: (context, mediaItemSnapshot) {
+          final mediaItem = mediaItemSnapshot.data;
+          if (mediaItem == null) {
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(),
-                const Icon(Icons.music_note, size: 200, color: Colors.grey),
-                const Spacer(),
-                
-                Text(
-                  song.title,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                
-                const SizedBox(height: 40),
 
-                StreamBuilder<DurationState>(
-                  stream: player.durationState,
-                  initialData: player.currentDurationState,
-                  builder: (context, snapshot) {
-                    final state = snapshot.data;
-                    final position = state?.position ?? Duration.zero;
-                    final total = state?.total ?? Duration.zero;
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                    return Column(
+          return StreamBuilder<PlaybackState>(
+            stream: audioHandler.playbackState,
+            builder: (context, playbackStateSnapshot) {
+              final playbackState = playbackStateSnapshot.data;
+              final isPlaying = playbackState?.playing ?? false;
+              final position = playbackState?.position ?? Duration.zero;
+              final totalDuration = mediaItem.duration ?? Duration.zero;
+              final repeatMode = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    const Icon(Icons.music_note, size: 200, color: Colors.grey),
+                    const Spacer(),
+
+                    Text(
+                      mediaItem.title,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    Column(
                       children: [
                         Slider(
                           min: 0,
-                          max: total.inMilliseconds.toDouble(),
+                          max: totalDuration.inMilliseconds.toDouble(),
                           value: position.inMilliseconds
-                              .clamp(0, total.inMilliseconds)
+                              .clamp(0, totalDuration.inMilliseconds)
                               .toDouble(),
                           onChanged: (value) {
-                            player.seek(Duration(milliseconds: value.toInt()));
+                            audioHandler.seek(Duration(milliseconds: value.toInt()));
                           },
                         ),
                         Padding(
@@ -99,65 +119,62 @@ class _PlayerPageState extends State<PlayerPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(_format(position)),
-                              Text(_format(total)),
+                              Text(_format(totalDuration)),
                             ],
                           ),
                         ),
                       ],
-                    );
-                  },
-                ),
+                    ),
 
-                const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                StreamBuilder<bool>(
-                  stream: player.isPlayingStream,
-                  builder: (context, snapshot) {
-                    final playing = snapshot.data ?? false;
-
-                    return StreamBuilder<bool>(
-                      stream: player.isRepeatingStream,
-                      initialData: player.isRepeating,
-                      builder: (context, snapRepeat) {
-                        final repeating = snapRepeat.data ?? false;
-
-
-                    return Row(
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         IconButton(
                           iconSize: 25,
-                          icon: Icon(repeating ? Icons.repeat_one : Icons.repeat),
-                          onPressed: player.repeat,
+                          icon: Icon(
+                            repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                            color: repeatMode != AudioServiceRepeatMode.none ? Theme.of(context).colorScheme.primary : Colors.grey,
+                          ),
+                          onPressed: () {
+                            if (repeatMode == AudioServiceRepeatMode.none) {
+                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+                            } else if (repeatMode == AudioServiceRepeatMode.all) {
+                              audioHandler.setRepeatMode(AudioServiceRepeatMode.one);
+                            } else {
+                              audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+                            }
+                          },
                         ),
                         IconButton(
                           iconSize: 48,
                           icon: const Icon(Icons.skip_previous),
-                          onPressed: player.previous,
+                          onPressed: audioHandler.skipToPrevious,
                         ),
                         IconButton(
                           iconSize: 80,
-                          icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                          onPressed: player.toggle,
+                          icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                          onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
                         ),
                         IconButton(
                           iconSize: 48,
                           icon: const Icon(Icons.skip_next),
-                          onPressed: player.next,
+                          onPressed: audioHandler.skipToNext,
                         ),
                       ],
-                    );
-                  });
-                        },
+                    ),
+                    const Spacer(),
+                  ],
                 ),
-                const Spacer(),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
+
 
   String _format(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');

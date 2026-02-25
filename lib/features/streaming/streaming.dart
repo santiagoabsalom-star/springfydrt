@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:springfydrt/core/directories.dart';
@@ -19,6 +21,7 @@ import 'dto/comando.dart';
 enum DuoState { none, connecting, hosting, following }
 
 class StreamingPage extends StatefulWidget {
+
   const StreamingPage({super.key});
 
   @override
@@ -36,20 +39,23 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
 
   IOWebSocketChannel? _channel;
   String? _usuarioActual;
-  String? _nombreUsuarioConexion;
+  String? _nombreDuo;
   int? _currentSongIndex;
   Directory? _prevDirectory;
   AudioDTO? _currentSong;
   String? _hostUser;
   bool _isFollowerConnected = false;
-
+   bool _isPlaying= false;
   Directory? _selectedDirectory;
   late Future<List<Directory>> _directoriesFuture;
-
+  bool _isDuoConnected= false;
   @override
   void initState() {
+
     super.initState();
+
     _initialize();
+
     WidgetsBinding.instance.addObserver(this);
 
     StreamNotifier.instance.addListener(disconnect);
@@ -65,11 +71,21 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     _refreshCloudSongs();
     _directoriesFuture = getDirectoriesOnFolder();
   }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
-      log("App cerrada completamente");
-      _channel?.sink.close();
+        log("App cerrada completamente");
+
+        if(_duoState == DuoState.hosting){
+          _channel?.sink.close();
+          _sendPlayerCommand('disconnect');
+          _pcmPlayer.stop();
+        }
+        else{
+          _sendPlayerCommand('follower-disconnect');
+          _pcmPlayer.stop();
+        }
 
     }
 
@@ -80,7 +96,14 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   @override
   void dispose() {
 
-    _channel?.sink.close();
+    if(_duoState == DuoState.hosting){
+      _sendPlayerCommand('disconnect');
+      _pcmPlayer.stop();
+    }
+    else{
+      _sendPlayerCommand('follower-disconnect');
+      _pcmPlayer.stop();
+    }
     WidgetsBinding.instance.removeObserver(this);
     StreamFolderNotifier.instance.removeListener(() {
       _refreshCloudSongs();
@@ -90,12 +113,48 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     });
     StreamNotifier.instance.removeListener(disconnect);
     _stateController.close();
+
     _pcmPlayer.close();
     super.dispose();
   }
+  void isDuoConnected() {
+    log("Enviando verificacion de conexion");
 
+    _sendPlayerCommand("is-duo-connected");
+
+  }
+Future<void> obtenerDuo() async {
+    if(_duoState == DuoState.hosting || _duoState == DuoState.following){
+      final String? user = await obtainUserConection();
+      setState(() {
+        _nombreDuo=user;
+
+      });
+    }
+      
+  }
   Future<void> disconnect() async {
-    _channel?.sink.close();
+    if(_duoState == DuoState.hosting){
+      _sendPlayerCommand('disconnect');
+    await _pcmPlayer.stop();
+    setState(() {
+      _currentSong = null;
+      _hostUser = null;
+      _isFollowerConnected = false;
+      _currentSongIndex = null;
+    });
+    _emitState(DuoState.none);
+    }
+    else{
+      await _pcmPlayer.stop();
+      _sendPlayerCommand('follower-disconnect');
+
+      setState(() {
+        _isFollowerConnected = false;
+      });
+
+
+    }
   }
 
   void _emitState(DuoState s) {
@@ -106,21 +165,29 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   }
 
   Future<void> _initialize() async {
-
+    await _obtainUser();
     await _pcmPlayer.ensureReady();
     _emitState(DuoState.connecting);
-    await _obtainUser();
+
 
     final user = await obtainUserConection();
     if (user != null && user.isNotEmpty) {
-      _nombreUsuarioConexion = user;
+      _nombreDuo = user;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showUserSelectionDialog();
       });
     }
+    if (mounted) {
+      if (await hasConnection()) {
+        _connect();
 
-    await _connect();
+        log("WebSocket connected.");
+      } else {
+        log("No hay conexión a internet");
+      }
+
+    }
     if (_duoState == DuoState.connecting) {
       _emitState(DuoState.none);
     }
@@ -196,9 +263,9 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
       DuoRequest(username1: currentUser, username2: selectedUser);
       try {
         await createDuo(duoRequest);
-        _nombreUsuarioConexion = selectedUser;
+        _nombreDuo = selectedUser;
         log("currentUser: $currentUser");
-        log("_nombreUsuarioConexion: $_nombreUsuarioConexion");
+        log("_nombreUsuarioConexion: $_nombreDuo");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Ahora estás en un dúo con $selectedUser.')),
@@ -220,6 +287,13 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     }
   }
 
+
+
+  Future<bool> hasConnection() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+
+    return connectivityResult != ConnectivityResult.none;
+  }
   Future<void> _connect() async {
     if (_usuarioActual == null) return;
 
@@ -229,12 +303,20 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     int _wavHeaderBytesPending = 44;
 
     try {
-      _channel = await connect(userHeader);
-      log("WebSocket connected.");
+      if (mounted) {
+        if (await hasConnection()) {
+          _channel = await connect(userHeader);
 
+        } else {
+          log("No hay conexión a internet");
+        }
+      }
+
+      isDuoConnected();
       _channel!.stream.listen((message) async {
         if (message is String) {
           final comando = ComandoDTO.fromJson(jsonDecode(message));
+          log(comando.comando);
           await _handleCommand(comando);
           return;
         }
@@ -291,9 +373,15 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sesión dúo terminada.')),
         );
-
-        _connect();
-      }, onError: (error) async {
+        if (mounted) {
+          if (await hasConnection()) {
+            _channel = await connect(userHeader);
+            log("WebSocket connected.");
+          } else {
+            log("No hay conexión a internet");
+          }
+        }
+        }, onError: (error) async {
         log("WebSocket error: $error");
         if (!mounted) return;
 
@@ -324,7 +412,8 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   Future<void> _handleCommand(ComandoDTO comando) async {
     switch (comando.comando) {
       case 'start':
-        log("Following niggaaaa");
+        log("following niggaaaa");
+
         if (_usuarioActual == comando.seguidor) {
           final songs = await _cloudSongs;
 
@@ -332,7 +421,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
           songs.indexWhere((s) => s.audioId == comando.musicId);
           if (songIndex != -1) {
             final song = songs[songIndex];
-            log("following");
+
             setState(() {
               _currentSongIndex = songIndex;
               _currentSong = song;
@@ -346,8 +435,23 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
           }
         }
         break;
-
+      case 'finished':
+        _skipToNextSong();
+      case 'duo-connected':
+        log("duo conectado");
+        setState(() {
+          _isDuoConnected= true;
+        });
+        break;
+      case 'duo-disconnected':
+        log("duo desconectado");
+        setState(() {
+          log("cambiando estado");
+          _isDuoConnected= false;
+        });
+        break;
       case 'disconnect':
+        log("recibiendo disconnect");
         await _pcmPlayer.stop();
         setState(() {
           _currentSong = null;
@@ -357,7 +461,20 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         });
         _emitState(DuoState.none);
         break;
-
+      case 'follower-connect':
+        setState(() {
+          _isFollowerConnected = true;
+        });
+        break;
+      case 'follower-disconnect':
+        setState(() {
+          _isFollowerConnected = false;
+        });
+        break;
+      case 'ping':
+        log("Intentando enviar pong");
+        _sendPlayerCommand('pong');
+        break;
       case 'stop':
         if (_duoState == DuoState.following) await _pcmPlayer.stop();
         break;
@@ -466,35 +583,50 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
 
   void _sendPlayerCommand(String command,
       {Map<String, dynamic> params = const {}}) {
-    if ((_duoState != DuoState.hosting && _duoState != DuoState.following) ||
-        _channel == null) return;
 
     final Map<String, dynamic> commandData;
-
-    if (_duoState == DuoState.hosting) {
-      commandData = {
-        'comando': command,
-        'anfitrion': _usuarioActual,
-        'seguidor': _nombreUsuarioConexion,
-        'musicId': _currentSong?.audioId,
+    if(command=='is-duo-connected'){
+      log("Enviando verificacion de conexion");
+      commandData={
+        'comando':command,
+        'anfitrion':_usuarioActual,
         ...params,
       };
-    } else {
-      commandData = {
-        'comando': command,
-        'anfitrion': _hostUser,
-        'seguidor': _usuarioActual,
-        'musicId': _currentSong?.audioId,
-        ...params,
-      };
+      _channel!.sink.add(jsonEncode(commandData));
     }
-    _channel!.sink.add(jsonEncode(commandData));
+    else {
+      if ((_duoState != DuoState.hosting && _duoState != DuoState.following) ||
+          _channel == null) return;
+
+
+      if (_duoState == DuoState.hosting) {
+        commandData = {
+          'comando': command,
+          'anfitrion': _usuarioActual,
+          'seguidor': _nombreDuo,
+          'musicId': _currentSong?.audioId,
+          ...params,
+        };
+      } else {
+        commandData = {
+          'comando': command,
+          'anfitrion': _hostUser,
+          'seguidor': _usuarioActual,
+          'musicId': _currentSong?.audioId,
+          ...params,
+        };
+      }
+      _channel!.sink.add(jsonEncode(commandData));
+    }
+
   }
 
   Future<void> _startHosting(LocalSong localSong) async {
+    _isPlaying=true;
     if (_channel == null ||
         _usuarioActual == null ||
-        _nombreUsuarioConexion == null) {
+        _nombreDuo == null) {
+
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               'No se puede iniciar, falta información de usuario o conexión.')));
@@ -515,6 +647,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
           content: Text('La canción no está disponible en la nube.')));
       return;
     }
+  PlayerNotifier.instance.notify();
 
     setState(() {
       _currentSong = songToHost;
@@ -527,20 +660,31 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     await _pcmPlayer.ensureReady();
 
     _sendPlayerCommand('start');
+
   }
 
   Future<void> _disconnect() async {
-    _sendPlayerCommand('disconnect');
+    if(_duoState == DuoState.hosting){
+      _sendPlayerCommand('disconnect');
+      await _pcmPlayer.stop();
+      setState(() {
+        _currentSong = null;
+        _hostUser = null;
+        _isFollowerConnected = false;
+        _currentSongIndex = null;
+      });
+      _emitState(DuoState.none);
+    }
+    else{
+      await _pcmPlayer.stop();
 
-    await _pcmPlayer.close();
+      _sendPlayerCommand('follower-disconnect');
+      setState(() {
+        _isFollowerConnected = false;
+      });
 
-    setState(() {
-      _currentSong = null;
-      _hostUser = null;
-      _isFollowerConnected = false;
-      _currentSongIndex = null;
-    });
-    _emitState(DuoState.none);
+
+    }
   }
 
   @override
@@ -565,14 +709,20 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
             builder: (context, snap) {
               final state = snap.data ?? DuoState.none;
               if (state == DuoState.none) {
-                return IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    _refreshCloudSongs();
-                    setState(() {
-                      _directoriesFuture = getDirectoriesOnFolder();
-                    });
-                  },
+
+                return Row( // Envuelve los widgets en un Row
+                  children: [
+                     Text(_isDuoConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'), // Tu widget al lado del botón
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () {
+                        _refreshCloudSongs();
+                        setState(() {
+                          _directoriesFuture = getDirectoriesOnFolder();
+                        });
+                      },
+                    ),
+                  ],
                 );
               }
               return const SizedBox.shrink();
@@ -661,6 +811,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
                 leading: const Icon(Icons.music_note),
                 title: Text(song.title),
                 onTap: () {
+
                   setState(() {
                     _prevDirectory= _selectedDirectory;
                     _selectedDirectory = null;
@@ -713,16 +864,18 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
                   iconSize: 48,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.pause),
-                  onPressed: () => _sendPlayerCommand('stop'),
+                  icon: _isPlaying ? const Icon(Icons.pause) : const Icon(Icons.play_arrow),
+                  onPressed: () {
+                    _isPlaying ? _sendPlayerCommand('stop')  : _sendPlayerCommand('resume');
+                    setState(() {
+                      _isPlaying = !_isPlaying;
+                    });
+
+
+                    },
                   iconSize: 48,
                 ),
-                const SizedBox(width: 24),
-                IconButton(
-                  icon: const Icon(Icons.play_arrow),
-                  onPressed: () => _sendPlayerCommand('resume'),
-                  iconSize: 48,
-                ),
+
                 IconButton(
                   icon: const Icon(Icons.skip_next),
                   onPressed: () async {
@@ -733,6 +886,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
               ],
             ),
             const SizedBox(height: 32),
+            Text(_isFollowerConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'),
             ElevatedButton(
               onPressed:()async {
                 setState(() {
@@ -746,11 +900,18 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
           ] else ...[
             ElevatedButton(
               onPressed: () {
+                PlayerNotifier.instance.notify();
                 setState(() {
                   _isFollowerConnected = !_isFollowerConnected;
                 });
+
+                if (_isFollowerConnected) {
+
+                  PlayerNotifier.instance.notify();
+                   _pcmPlayer.ensureReady();
+                }
                 _sendPlayerCommand(
-                    _isFollowerConnected ? 'connect' : 'follower-disconnect');
+                    _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
               },
               child: Text(_isFollowerConnected ? 'Desconectar' : 'Conectar'),
             ),

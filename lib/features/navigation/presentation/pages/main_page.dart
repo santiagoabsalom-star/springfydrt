@@ -55,6 +55,7 @@ class _MainPageState extends State<MainPage> {
       valueListenable: _controller,
       builder: (context, index, _) {
 
+
         return Scaffold(
 
           body: Column(
@@ -62,6 +63,7 @@ class _MainPageState extends State<MainPage> {
               Expanded(
                 child: IndexedStack(
                   index: index,
+
                   children: const [
                     HomePage(),
                     CloudPage(),

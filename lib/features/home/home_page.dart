@@ -85,6 +85,7 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, index) {
                   final video = _results[index];
                   return _SearchResultTile(
+
                     video: video,
                     cloudDownloaded: _cloudDownloaded.contains(video.videoId),
                     localDownloaded: _localDownloaded.contains(video.videoId),

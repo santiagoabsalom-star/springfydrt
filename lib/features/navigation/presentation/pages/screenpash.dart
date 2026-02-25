@@ -25,14 +25,13 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkLogin();
+    _checkLoginAndNavigate();
   }
 
-  Future<void> _checkLogin() async {
+  Future<void> _checkLoginAndNavigate() async {
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
       if (!mounted) return;
-      // Offline: go to main page, don't show login
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MainPage()),
@@ -40,58 +39,69 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    final logged = await isLogged();
 
-    if (!mounted) return;
+    final directory = await getApplicationDocumentsDirectory();
+    final loginFile = File(p.join(directory.path, 'loginInfo.json'));
 
-    if (logged) {
+    if (await loginFile.exists()) {
+      log("Archivo de login encontrado. Navegando a MainPage mientras se verifica en segundo plano.");
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MainPage()),
       );
+
+      _verifyLoginInBackground(loginFile);
+
     } else {
+      log("Archivo de login no encontrado. Navegando a LoginScreen.");
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
     }
   }
-  Future<bool> isLogged() async {
-    final directory = await getApplicationDocumentsDirectory();
 
-    final loginFile = File(p.join(directory.path, 'loginInfo.json'));
-    if (!await loginFile.exists()) {
-      return false;
-    }
+  Future<void> _verifyLoginInBackground(File loginFile) async {
     try {
       final raw = await loginFile.readAsString();
-
       final Map<String, dynamic> decodedJson = jsonDecode(raw);
-
       final loginRequest = LoginRequest.fromJson(decodedJson);
-      if(loginRequest.username.isEmpty || loginRequest.password.isEmpty){
-        return false;
-      }
-      final LoginResponse response= await login(loginRequest);
-      if(response.httpCode!=200){
 
-        log(response.toString());
-        return false;
-
+      if (loginRequest.username.isEmpty || loginRequest.password.isEmpty) {
+        throw Exception("Credenciales inválidas en el archivo local.");
       }
+
+      final LoginResponse response = await login(loginRequest);
+
+      if (response.httpCode != 200) {
+        throw Exception("La verificación en segundo plano falló: ${response.message}");
+      }
+
       await TokenStorage.saveLogin(
         token: response.token!,
         username: response.username ?? "",
         id: response.id ?? 0,
       );
-      return true;
-    }catch(e){
-      log("Error leyendo $e");
-      return false;
+      log("Verificación en segundo plano exitosa. Token actualizado.");
+
+    } catch (e) {
+      log("Error en la verificación de fondo: $e. Redirigiendo a LoginScreen.");
+
+      if (mounted) {
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false, // Elimina todas las rutas anteriores
+        );
+      }
     }
-
-
   }
+
+
+
   @override
   Widget build(BuildContext context) {
     return const Scaffold(

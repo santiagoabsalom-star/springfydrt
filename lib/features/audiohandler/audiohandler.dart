@@ -1,14 +1,15 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:springfydrt/features/notifier/notifier.dart';
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final _player = AudioPlayer();
   Future<void> reset() async {
-    await _player.stop();
-    await _player.setAudioSource(ConcatenatingAudioSource(children: []));
 
+    await _player.setAudioSource(ConcatenatingAudioSource(children: []));
     queue.add([]);
-    mediaItem.add(null);
+
 
     playbackState.add(playbackState.value.copyWith(
       playing: false,
@@ -30,12 +31,60 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
   }
 
+
   MyAudioHandler() {
-    _player.playbackEventStream.map(_transformEvent).listen((state) {
-      playbackState.add(state.copyWith(
-        repeatMode: playbackState.value.repeatMode,
-      ));
-    });
+    final playbackStateStream = Rx.combineLatest4<PlaybackEvent, LoopMode, bool, int?, PlaybackState>(
+        _player.playbackEventStream,
+        _player.loopModeStream,
+        _player.playingStream,
+        _player.currentIndexStream,
+            (event, loopMode, playing, index) {
+
+          final repeatMode = const {
+            LoopMode.off: AudioServiceRepeatMode.none,
+            LoopMode.one: AudioServiceRepeatMode.one,
+            LoopMode.all: AudioServiceRepeatMode.all,
+          }[loopMode] ??
+              AudioServiceRepeatMode.none;
+
+          return PlaybackState(
+            controls: [
+              MediaControl.skipToPrevious,
+              if (playing) MediaControl.pause else MediaControl.play,
+              MediaControl.stop,
+              MediaControl.skipToNext,
+            ],
+            systemActions: const {
+              MediaAction.seek,
+              MediaAction.seekForward,
+              MediaAction.seekBackward,
+              MediaAction.skipToNext,
+              MediaAction.skipToPrevious,
+              MediaAction.playPause,
+            },
+            androidCompactActionIndices: const [0, 1, 3],
+            processingState: const {
+              ProcessingState.idle: AudioProcessingState.idle,
+              ProcessingState.loading: AudioProcessingState.loading,
+              ProcessingState.buffering: AudioProcessingState.buffering,
+              ProcessingState.ready: AudioProcessingState.ready,
+              ProcessingState.completed: AudioProcessingState.completed,
+            }[event.processingState] ??
+                AudioProcessingState.idle,
+            playing: playing,
+            updatePosition: _player.position,
+            bufferedPosition: event.bufferedPosition,
+            speed: _player.speed,
+            queueIndex: index,
+            repeatMode: repeatMode,
+          );
+        });
+
+    Rx.combineLatest2<PlaybackState, Duration, PlaybackState>(
+      playbackStateStream,
+      _player.positionStream,
+          (state, position) => state.copyWith(updatePosition: position),
+    ).listen(playbackState.add);
 
     _player.currentIndexStream.listen((index) {
       if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
@@ -53,14 +102,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _player.processingStateStream.listen((state) async {
       if (state == ProcessingState.completed) {
         final loopMode = _player.loopMode;
-
         if (loopMode == LoopMode.one) return;
-
-
         await skipToNext();
       }
     });
+    PlayerNotifier.instance.addListener(stopAndClearPlayer);
+  }
 
+  @override
+  Future<void> onTaskRemoved() {
+    PlayerNotifier.instance.removeListener(stopAndClearPlayer);
+    _player.dispose();
+    return super.onTaskRemoved();
+  }
+  Future<void> stopAndClearPlayer() async {
+_player.stop();
+    mediaItem.add(null);
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.idle,
+    ));
   }
   Stream<bool> get isRepeatingStream =>
       _player.loopModeStream.map((mode) => mode != LoopMode.off);
@@ -73,12 +133,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   
   @override
   Future<void> stop() async {
-    await _player.stop();
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
       playing: false,
     ));
-    await super.stop();
   }
 
   @override
@@ -125,7 +183,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }).toList();
 
     queue.add(items);
-    
+    if (items.isNotEmpty) {
+      mediaItem.add(items[startIndex]);
+    }
     await _player.setAudioSource(
       ConcatenatingAudioSource(children: sources),
       initialIndex: startIndex,
@@ -134,35 +194,5 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     play();
   }
 
-  PlaybackState _transformEvent(PlaybackEvent event) {
-    return PlaybackState(
-      controls: [
-        MediaControl.skipToPrevious,
-        if (_player.playing) MediaControl.pause else MediaControl.play,
-        MediaControl.stop,
-        MediaControl.skipToNext,
-      ],
-      systemActions: const {
-        MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
-        MediaAction.skipToNext,
-        MediaAction.skipToPrevious,
-        MediaAction.playPause,
-      },
-      androidCompactActionIndices: const [0, 1, 3],
-      processingState: const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState] ?? AudioProcessingState.idle,
-      playing: _player.playing,
-      updatePosition: _player.position,
-      bufferedPosition: _player.bufferedPosition,
-      speed: _player.speed,
-      queueIndex: event.currentIndex,
-    );
-  }
+
 }
