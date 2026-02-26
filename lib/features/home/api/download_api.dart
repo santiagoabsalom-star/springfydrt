@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:springfydrt/features/home/dtos/song_dto.dart';
 
 import '../../../core/downloader/downloader.dart';
+import '../../../core/log.dart';
 import '../../../core/network/api_connect.dart';
 
 class DownloadApi {
@@ -53,7 +53,7 @@ class DownloadApi {
       videoId, directory
     );
 
-    log('Guardado como: ${file.path}');
+    Log.d('Guardado como: ${file.path}');
     return file;
   }
 

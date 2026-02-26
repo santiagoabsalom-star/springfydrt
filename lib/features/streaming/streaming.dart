@@ -11,6 +11,7 @@ import 'package:springfydrt/core/directories.dart';
 import 'package:springfydrt/features/home/dtos/LocalSong.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
 import 'package:web_socket_channel/io.dart';
+import '../../core/log.dart';
 import '../cloud/api/api_cloud.dart';
 import '../cloud/dto/audioDto.dart';
 import '../login/api/token.dart';
@@ -32,7 +33,8 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   final ApiCloud _apiCloud = ApiCloud();
   late Future<List<AudioDTO>> _cloudSongs;
   final PcmPlayer _pcmPlayer = PcmPlayer();
-
+  double _currentSliderValue = 0.0;
+  Timer? _progressTimer;
   final StreamController<DuoState> _stateController =
   StreamController<DuoState>.broadcast();
   DuoState _duoState = DuoState.connecting;
@@ -49,16 +51,19 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   Directory? _selectedDirectory;
   late Future<List<Directory>> _directoriesFuture;
   bool _isDuoConnected= false;
+  int _currentSongDuration=0;
+  bool disconnectedFromSession= false;
   @override
   void initState() {
-
+    _startProgressTimer();
     super.initState();
 
     _initialize();
 
     WidgetsBinding.instance.addObserver(this);
 
-    StreamNotifier.instance.addListener(disconnect);
+    StreamFromSessionNotifier.instance.addListener(disconnectFromSession);
+    StreamFromPlayerNotifier.instance.addListener(disconnectFromPlayer);
     StreamFolderNotifier.instance.addListener(() {
       if (!mounted) return;
 
@@ -75,7 +80,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
-        log("App cerrada completamente");
+        Log.d("App cerrada completamente");
 
         if(_duoState == DuoState.hosting){
           _channel?.sink.close();
@@ -90,14 +95,15 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     }
 
     if (state == AppLifecycleState.paused) {
-      log("App en segundo plano");
+      Log.d("App en segundo plano");
     }
   }
   @override
   void dispose() {
-
+    _progressTimer?.cancel();
     if(_duoState == DuoState.hosting){
       _sendPlayerCommand('disconnect');
+
       _pcmPlayer.stop();
     }
     else{
@@ -111,14 +117,30 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         _directoriesFuture = getDirectoriesOnFolder();
       });
     });
-    StreamNotifier.instance.removeListener(disconnect);
+    StreamFromSessionNotifier.instance.removeListener(disconnectFromSession);
+    StreamFromPlayerNotifier.instance.removeListener(disconnectFromPlayer);
     _stateController.close();
 
     _pcmPlayer.close();
+
     super.dispose();
   }
+  void _resetSlider() {
+    setState(() {
+      _currentSliderValue = 0.0;
+    });
+  }
+  void _startProgressTimer() {
+    _progressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_isPlaying && _currentSongDuration > 0) {
+        setState(() {
+          _currentSliderValue = (_currentSliderValue + 1).clamp(0.0, _currentSongDuration.toDouble());
+        });
+      }
+    });
+  }
   void isDuoConnected() {
-    log("Enviando verificacion de conexion");
+    Log.d("Enviando verificacion de conexion");
 
     _sendPlayerCommand("is-duo-connected");
 
@@ -133,8 +155,50 @@ Future<void> obtenerDuo() async {
     }
       
   }
-  Future<void> disconnect() async {
+  Future<void> disconnectFromSession() async{
+    setState(() {
+      _isPlaying=false;
+    });
+    disconnectedFromSession=true;
     if(_duoState == DuoState.hosting){
+      _channel!.sink.close();
+      _channel=null;
+
+      _resetSlider();
+      _sendPlayerCommand('disconnect');
+      await _pcmPlayer.stop();
+      setState(() {
+        _currentSong = null;
+        _usuarioActual=null;
+        _nombreDuo=null;
+        _channel=null;
+        _hostUser = null;
+        _isFollowerConnected = false;
+        _currentSongIndex = null;
+      });
+      _emitState(DuoState.none);
+    }
+    else{
+
+      _channel!.sink.close();
+      _channel=null;
+      await _pcmPlayer.stop();
+      _sendPlayerCommand('follower-disconnect');
+
+      setState(() {
+        _isFollowerConnected = false;
+      });
+
+
+    }
+  }
+  Future<void> disconnectFromPlayer() async {
+    setState(() {
+      _isPlaying=false;
+    });
+    if(_duoState == DuoState.hosting){
+
+      _resetSlider();
       _sendPlayerCommand('disconnect');
     await _pcmPlayer.stop();
     setState(() {
@@ -157,6 +221,7 @@ Future<void> obtenerDuo() async {
     }
   }
 
+  
   void _emitState(DuoState s) {
     _duoState = s;
     if (!_stateController.isClosed) {
@@ -166,7 +231,8 @@ Future<void> obtenerDuo() async {
 
   Future<void> _initialize() async {
     await _obtainUser();
-    await _pcmPlayer.ensureReady();
+    await _pcmPlayer.initialize();
+
     _emitState(DuoState.connecting);
 
 
@@ -182,9 +248,9 @@ Future<void> obtenerDuo() async {
       if (await hasConnection()) {
         _connect();
 
-        log("WebSocket connected.");
+        Log.d("WebSocket connected.");
       } else {
-        log("No hay conexión a internet");
+        Log.d("No hay conexión a internet");
       }
 
     }
@@ -195,12 +261,12 @@ Future<void> obtenerDuo() async {
 
   Future<void> _obtainUser() async {
     final token = await TokenStorage.getToken();
-    log("Token: $token");
+    Log.d("Token: $token");
     if (token != null) {
       _usuarioActual = await TokenStorage.getUsername();
-      log("Usuario actual: $_usuarioActual");
+      Log.d("Usuario actual: $_usuarioActual");
     } else {
-      log("No se pudo obtener el usuario actual.");
+      Log.d("No se pudo obtener el usuario actual.");
     }
   }
 
@@ -264,8 +330,8 @@ Future<void> obtenerDuo() async {
       try {
         await createDuo(duoRequest);
         _nombreDuo = selectedUser;
-        log("currentUser: $currentUser");
-        log("_nombreUsuarioConexion: $_nombreDuo");
+        Log.d("currentUser: $currentUser");
+        Log.d("_nombreUsuarioConexion: $_nombreDuo");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Ahora estás en un dúo con $selectedUser.')),
@@ -308,7 +374,7 @@ Future<void> obtenerDuo() async {
           _channel = await connect(userHeader);
 
         } else {
-          log("No hay conexión a internet");
+          Log.d("No hay conexión a internet");
         }
       }
 
@@ -316,7 +382,8 @@ Future<void> obtenerDuo() async {
       _channel!.stream.listen((message) async {
         if (message is String) {
           final comando = ComandoDTO.fromJson(jsonDecode(message));
-          log(comando.comando);
+          Log.d(message.toString());
+          Log.d(comando.comando);
           await _handleCommand(comando);
           return;
         }
@@ -359,11 +426,19 @@ Future<void> obtenerDuo() async {
           await _pcmPlayer.play(pcm);
         }
       }, onDone: () async {
-        log("WebSocket connection closed.");
+        Log.d("WebSocket connection closed.");
         if (!mounted) return;
+        if(disconnectedFromSession){
+          disconnectedFromSession=false;
+          return;
 
+        }
         await _pcmPlayer.stop();
         setState(() {
+          _isPlaying= false;
+          _currentSongIndex = null;
+          _currentSliderValue=0.0;
+          _currentSongDuration=0;
           _currentSong = null;
           _hostUser = null;
           _isFollowerConnected = false;
@@ -376,13 +451,13 @@ Future<void> obtenerDuo() async {
         if (mounted) {
           if (await hasConnection()) {
             _channel = await connect(userHeader);
-            log("WebSocket connected.");
+            Log.d("WebSocket connected.");
           } else {
-            log("No hay conexión a internet");
+            Log.d("No hay conexión a internet");
           }
         }
         }, onError: (error) async {
-        log("WebSocket error: $error");
+        Log.d("WebSocket error: $error");
         if (!mounted) return;
 
         await _pcmPlayer.stop();
@@ -398,7 +473,7 @@ Future<void> obtenerDuo() async {
         );
       });
     } catch (e) {
-      log("Failed to connect: $e");
+      Log.d("Failed to connect: $e");
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -412,7 +487,8 @@ Future<void> obtenerDuo() async {
   Future<void> _handleCommand(ComandoDTO comando) async {
     switch (comando.comando) {
       case 'start':
-        log("following niggaaaa");
+        _resetSlider();
+        Log.d("following niggaaaa");
 
         if (_usuarioActual == comando.seguidor) {
           final songs = await _cloudSongs;
@@ -421,45 +497,59 @@ Future<void> obtenerDuo() async {
           songs.indexWhere((s) => s.audioId == comando.musicId);
           if (songIndex != -1) {
             final song = songs[songIndex];
-
+            Log.d("current song duration ${comando.duration}");
             setState(() {
+              Log.d(comando.isPlaying ? 'true' : 'false');
+              _isPlaying=comando.isPlaying;
               _currentSongIndex = songIndex;
               _currentSong = song;
+              _currentSliderValue=comando.currentPosition.toDouble();
+
+
               _hostUser = comando.anfitrion;
               _isFollowerConnected = false;
             });
             _emitState(DuoState.following);
             await _pcmPlayer.ensureReady();
           } else {
-            log("Song with ID ${comando.musicId} not found.");
+            Log.d("Song with ID ${comando.musicId} not found.");
           }
         }
         break;
       case 'finished':
         _skipToNextSong();
       case 'duo-connected':
-        log("duo conectado");
+        Log.d("duo conectado");
         setState(() {
           _isDuoConnected= true;
         });
         break;
       case 'duo-disconnected':
-        log("duo desconectado");
+        Log.d("duo desconectado");
         setState(() {
-          log("cambiando estado");
+          Log.d("cambiando estado");
           _isDuoConnected= false;
         });
         break;
       case 'disconnect':
-        log("recibiendo disconnect");
+        Log.d("recibiendo disconnect");
+        _resetSlider();
         await _pcmPlayer.stop();
         setState(() {
+          _currentSongDuration=0;
+          _isPlaying= false;
           _currentSong = null;
           _hostUser = null;
           _isFollowerConnected = false;
           _currentSongIndex = null;
         });
         _emitState(DuoState.none);
+        break;
+      case 'duration':
+        Log.d("Recibiendo duracion ${comando.duration}");
+        setState(() {
+          _currentSongDuration = comando.duration;
+        });
         break;
       case 'follower-connect':
         setState(() {
@@ -471,25 +561,37 @@ Future<void> obtenerDuo() async {
           _isFollowerConnected = false;
         });
         break;
-      case 'ping':
-        log("Intentando enviar pong");
-        _sendPlayerCommand('pong');
-        break;
+
       case 'stop':
+        Log.d("recibiendo stop");
+        setState(() {
+          Log.d("cambiando a false");
+          _isPlaying=false;
+        });
         if (_duoState == DuoState.following) await _pcmPlayer.stop();
         break;
 
       case 'resume':
+        setState(() {
+          _isPlaying=true;
+        });
         if (_duoState == DuoState.following) await _pcmPlayer.resume();
         break;
-
+      case 'move':
+        setState(() {
+          _currentSliderValue=comando.segundosToMove.toDouble();
+        });
       case 'change':
+
+        _resetSlider();
+
         final songs = await _cloudSongs;
         final newIndex =
         songs.indexWhere((song) => song.audioId == comando.musicId);
 
         if (newIndex != -1) {
           setState(() {
+            if(!_isPlaying) _isPlaying=true;
             _currentSongIndex = newIndex;
             _currentSong = songs[newIndex];
           });
@@ -498,11 +600,15 @@ Future<void> obtenerDuo() async {
         break;
 
       default:
-        log("Comando desconocido recibido: ${comando.comando}");
+        Log.d("Comando desconocido recibido: ${comando.comando}");
     }
   }
 
   Future<void> _skipToNextSong() async {
+    _resetSlider();
+    setState(() {
+      if(!_isPlaying) _isPlaying=true;
+    });
     _selectedDirectory= _prevDirectory;
     //sin hacer setState para que no se cambie en ui:DDD
 
@@ -540,6 +646,10 @@ Future<void> obtenerDuo() async {
   }
 
   Future<void> _skipToPreviousSong() async {
+    _resetSlider();
+    setState(() {
+      if(!_isPlaying) _isPlaying=true;
+    });
     _selectedDirectory= _prevDirectory;
 
     if (_selectedDirectory == null) return;
@@ -586,7 +696,7 @@ Future<void> obtenerDuo() async {
 
     final Map<String, dynamic> commandData;
     if(command=='is-duo-connected'){
-      log("Enviando verificacion de conexion");
+      Log.d("Enviando verificacion de conexion");
       commandData={
         'comando':command,
         'anfitrion':_usuarioActual,
@@ -605,6 +715,9 @@ Future<void> obtenerDuo() async {
           'anfitrion': _usuarioActual,
           'seguidor': _nombreDuo,
           'musicId': _currentSong?.audioId,
+          'isPlaying': _isPlaying,
+          'currentPosition': _currentSliderValue.toInt(),
+
           ...params,
         };
       } else {
@@ -622,6 +735,7 @@ Future<void> obtenerDuo() async {
   }
 
   Future<void> _startHosting(LocalSong localSong) async {
+
     _isPlaying=true;
     if (_channel == null ||
         _usuarioActual == null ||
@@ -663,15 +777,21 @@ Future<void> obtenerDuo() async {
 
   }
 
-  Future<void> _disconnect() async {
+  Future<void> disconnectFromDuoPlayer() async {
+    setState(() {
+      _isPlaying=false;
+    });
     if(_duoState == DuoState.hosting){
       _sendPlayerCommand('disconnect');
+
+      _resetSlider();
       await _pcmPlayer.stop();
       setState(() {
         _currentSong = null;
         _hostUser = null;
         _isFollowerConnected = false;
         _currentSongIndex = null;
+        _prevDirectory=null;
       });
       _emitState(DuoState.none);
     }
@@ -710,7 +830,7 @@ Future<void> obtenerDuo() async {
               final state = snap.data ?? DuoState.none;
               if (state == DuoState.none) {
 
-                return Row( // Envuelve los widgets en un Row
+                return Row(
                   children: [
                      Text(_isDuoConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'), // Tu widget al lado del botón
                     IconButton(
@@ -853,6 +973,31 @@ Future<void> obtenerDuo() async {
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
+          Slider(
+            min: 0,max: _currentSongDuration.toDouble(),
+            value: _currentSliderValue.clamp(0.0, _currentSongDuration.toDouble()),
+            onChanged: (value) {
+              if(_duoState!=DuoState.hosting){
+                showTopNotification(context, "Controles manejados por el anfitrión.");
+              return;
+              }
+              setState(() {
+                _currentSliderValue = value;
+              });
+            },
+            onChangeEnd: (value) {
+              _sendPlayerCommand('move', params: {'segundosToMove': value.toInt()});
+            },
+          ),Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_formatDuration(Duration(seconds: _currentSliderValue.toInt()))),
+                Text(_formatDuration(Duration(seconds: _currentSongDuration))),
+              ],
+            ),
+          ),
           const SizedBox(height: 32),
           if (isHost) ...[
             Row(
@@ -893,8 +1038,8 @@ Future<void> obtenerDuo() async {
                   _selectedDirectory=_prevDirectory;
                   _prevDirectory=null;
                 });// logica cuando se desconecta y conecta no pierda el antiguo directorio
-
-                await _disconnect();},
+                _isPlaying= false;
+                await disconnectFromDuoPlayer();},
               child: const Text('Desconectar'),
             ),
           ] else ...[
@@ -921,5 +1066,60 @@ Future<void> obtenerDuo() async {
         ],
       ),
     );
+  }
+  String _formatDuration(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:'
+          '${minutes.toString().padLeft(2, '0')}:'
+          '${seconds.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes.toString().padLeft(2, '0')}:'
+          '${seconds.toString().padLeft(2, '0')}';
+    }
+  }
+  void showTopNotification(BuildContext context, String message) {
+    final overlay = Overlay.of(context);
+
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 60,
+        left: 0,
+        right: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                  )
+                ],
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      entry.remove();
+    });
   }
 }

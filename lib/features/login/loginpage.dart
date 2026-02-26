@@ -8,6 +8,7 @@ import 'package:springfydrt/features/login/api/login.dart';
 import 'package:springfydrt/features/navigation/presentation/pages/main_page.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/log.dart';
 import 'api/dto.dart';
 import 'api/token.dart';
 
@@ -72,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final jsonString = encoder.convert(loginReq.toJson());
       await file.writeAsString(jsonString);
     } catch (e) {
-      debugPrint("Error saving login info: $e");
+      Log.d("Error saving login info: $e");
     }
   }
 
@@ -119,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       setState(() => _errorMessage = "Error en el formato de respuesta del servidor.");
     } catch (e) {
       setState(() => _errorMessage = "Ocurrió un error inesperado. Inténtalo de nuevo.");
-      debugPrint("Login error: $e");
+      Log.d("Login error: $e");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

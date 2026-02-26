@@ -194,5 +194,5 @@ _player.stop();
     play();
   }
 
-
+//TODO:handler para streaming
 }

@@ -9,6 +9,7 @@ import 'package:springfydrt/features/home/dtos/song_dto.dart';
 import 'package:springfydrt/features/home/dtos/LocalSong.dart';
 import 'package:springfydrt/core/directories.dart';
 
+import '../../core/log.dart';
 import '../notifier/notifier.dart';
 
 class CloudPage extends StatefulWidget {
@@ -74,16 +75,14 @@ class _CloudPageState extends State<CloudPage> {
     if (directory != null) {
       if (_isDownloaded(audio) || _downloadingIds.contains(audio.audioId))
         return;
-      log(audio.audioId);
+      Log.d(audio.audioId);
       setState(() {
         _downloadingIds.add(audio.audioId);
       });
 
       try {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Descargando ${audio.nombreAudio}...')),
-          );
+         showTopNotification(context, "Descargando ${audio.nombreAudio}");
         }
 
         final videoInfo = VideoInfo(
@@ -101,11 +100,7 @@ class _CloudPageState extends State<CloudPage> {
         DownloadsNotifier.instance.notify();
         StreamFolderNotifier.instance.notify();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${audio.nombreAudio} descargado con éxito'),
-            ),
-          );
+          showTopNotification(context, "Cancion descargada");
         }
       } catch (e) {
         if (mounted) {
@@ -285,4 +280,46 @@ class _CloudPageState extends State<CloudPage> {
       },
     );
   }
+  void showTopNotification(BuildContext context, String message) {
+    final overlay = Overlay.of(context);
+
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 60,
+        left: 0,
+        right: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                  )
+                ],
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(seconds: 1), () {
+      entry.remove();
+    });
+  }
+
 }

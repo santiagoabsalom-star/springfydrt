@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 
 class PcmPlayer {
@@ -10,22 +9,28 @@ class PcmPlayer {
 
   bool _ready = false;
   Future<void>? _initFuture;
+Future<void>initialize(){
+  _initFuture ??= () async {
+    await FlutterPcmSound.setup(
+      sampleRate: sampleRate,
+      channelCount: channelCount,
+      iosAllowBackgroundAudio: true,
+    );
 
-  Future<void> ensureReady() {
-    _initFuture ??= () async {
-      await FlutterPcmSound.setup(
-        sampleRate: sampleRate,
-        channelCount: channelCount,
-        iosAllowBackgroundAudio: true,
-      );
+    await FlutterPcmSound.start();
 
-      await FlutterPcmSound.start();
+    _isPaused = false;
+    _ready = true;
+  }();
 
-      _isPaused = false;
-      _ready = true;
-    }();
+  return _initFuture!;
+}
+  Future<void> ensureReady() async{
+    if (_ready) return Future.value();
 
-    return _initFuture!;
+    _isPaused = false;
+    _ready = true;
+    FlutterPcmSound.start();
   }
 
   Future<void> play(PcmArrayInt16 buffer) async {

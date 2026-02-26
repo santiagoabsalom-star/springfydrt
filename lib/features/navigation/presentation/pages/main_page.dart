@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:springfydrt/features/cloud/cloud.dart';
 import 'package:springfydrt/features/download/downloads.dart';
 import 'package:springfydrt/features/playerpage/playerminiglobal.dart';
+import 'package:springfydrt/features/session/sessionpage.dart';
 import 'package:springfydrt/features/streaming/streaming.dart';
 import '../../../home/home_page.dart';
 import '../../navigation_controller.dart';
@@ -69,6 +70,7 @@ class _MainPageState extends State<MainPage> {
                     CloudPage(),
                     DownloadedSongsPage(),
                     StreamingPage(),
+                    SessionPage(),
                   ],
                 ),
               ),
@@ -103,6 +105,10 @@ class _MainPageState extends State<MainPage> {
               BottomNavigationBarItem(
                 icon: Icon(Icons.people, color: _isConnected ? null : Colors.grey),
                 label: 'Duo',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person, color: _isConnected ? null : Colors.grey),
+                label: 'Perfil',
               ),
             ],
           ),

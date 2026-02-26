@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'dart:developer';
 
 import 'package:http/http.dart';
 import 'package:springfydrt/core/network/api_connect.dart';
 import 'package:web_socket_channel/io.dart';
+
+import '../../../core/log.dart';
 final Uri streamUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
 ApiConnect _apiConnect= ApiConnect();
 Map<String, String> applicationHeader= {
@@ -38,7 +39,7 @@ Future<List<String>> allUserNames() async {
 
 Future<String> createDuo(DuoRequest duorequest) async{
   final Response response=await _apiConnect.post("/api/streaming/create-duo", true, duorequest.toJson() );
-    log("Body de la respuesta: ${response.body}");
+    Log.d("Body de la respuesta: ${response.body}");
   return response.body;
 
 }

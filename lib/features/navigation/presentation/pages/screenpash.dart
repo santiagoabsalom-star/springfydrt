@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/log.dart';
 import '../../../login/api/dto.dart';
 import '../../../login/api/login.dart';
 import '../../../login/api/token.dart';
@@ -44,7 +44,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final loginFile = File(p.join(directory.path, 'loginInfo.json'));
 
     if (await loginFile.exists()) {
-      log("Archivo de login encontrado. Navegando a MainPage mientras se verifica en segundo plano.");
+      Log.d("Archivo de login encontrado. Navegando a MainPage mientras se verifica en segundo plano.");
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen> {
       _verifyLoginInBackground(loginFile);
 
     } else {
-      log("Archivo de login no encontrado. Navegando a LoginScreen.");
+      Log.d("Archivo de login no encontrado. Navegando a LoginScreen.");
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -84,10 +84,10 @@ class _SplashScreenState extends State<SplashScreen> {
         username: response.username ?? "",
         id: response.id ?? 0,
       );
-      log("Verificación en segundo plano exitosa. Token actualizado.");
+      Log.d("Verificación en segundo plano exitosa. Token actualizado.");
 
     } catch (e) {
-      log("Error en la verificación de fondo: $e. Redirigiendo a LoginScreen.");
+      Log.d("Error en la verificación de fondo: $e. Redirigiendo a LoginScreen.");
 
       if (mounted) {
 

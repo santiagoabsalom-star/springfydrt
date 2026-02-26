@@ -262,7 +262,7 @@ void _loadDirectories() {
                 ),
 
                 onTap: () {
-                  StreamNotifier.instance.notify();
+                  StreamFromPlayerNotifier.instance.notify();
                   Navigator.push(
                     context,
                     MaterialPageRoute(

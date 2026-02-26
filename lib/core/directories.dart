@@ -1,12 +1,12 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../features/home/dtos/LocalSong.dart';
+import 'log.dart';
 Future<Directory> getAudioDirectory() async {
   final directory = await getApplicationDocumentsDirectory();
-  log('Audio dir: ${directory.path}');
+  Log.d('Audio dir: ${directory.path}');
   return directory;
 }
 
@@ -16,7 +16,7 @@ Future<List<File>> getDownloadedMp3s() async {
 
   final files = await dir.list().where((e) => e is  File && e.path.endsWith(".mp3")).cast<File>().toList();
 
-  log('MP3 encontrados: ${files.length}');
+  Log.d('MP3 encontrados: ${files.length}');
   return files;
 }
 Future<List<File>> getDownloadedMp3sFromFolder(Directory folder) async {
@@ -24,7 +24,7 @@ Future<List<File>> getDownloadedMp3sFromFolder(Directory folder) async {
 
   final files = await folder.list().where((e) => e is  File && e.path.endsWith(".mp3")).cast<File>().toList();
 
-  log('MP3 encontrados: ${files.length}');
+  Log.d('MP3 encontrados: ${files.length}');
   return files;
 }
 Future<Directory> createDirectory(String folderName) async {
@@ -35,7 +35,7 @@ Future<Directory> createDirectory(String folderName) async {
     return newDirectory;
   } else {
     final Directory createdDir = await newDirectory.create(recursive: true);
-    log('Directorio creado en: ${createdDir.path}');
+    Log.d('Directorio creado en: ${createdDir.path}');
     return createdDir;
   }
 }
@@ -44,9 +44,9 @@ Future<void> renameDirectory(String newName, Directory folder)async {
 
 try {
   await folder.rename(newPath);
-  log('Directorio renombrado a: $newPath');
+  Log.d('Directorio renombrado a: $newPath');
 }catch(e){
-  log("error al renombrar directorio $e");
+  Log.d("error al renombrar directorio $e");
 }
 
 }
@@ -105,9 +105,9 @@ Future<void> moveFile(LocalSong song, Directory destinationFolder) async {
 
 
       song.path='${destinationFolder.path}/$fileName';
-      log('Song movida con exito');
+      Log.d('Song movida con exito');
     }catch(e){
-      log("Ha habido un error $e");
+      Log.d("Ha habido un error $e");
     }
 
 
@@ -118,13 +118,13 @@ Future<void> deleteFolder(Directory folder) async {
   try {
     if(folder.existsSync()){
       await folder.delete(recursive: true);
-      log("Directorio borrado con exito");
+      Log.d("Directorio borrado con exito");
     }
     else{
       return;
     }
 
-  }catch(e){log("Error al intentar borrar este directorio");}
+  }catch(e){Log.d("Error al intentar borrar este directorio");}
 }
 Future<List<LocalSong>> getLocalSongs() async {
   final rootDir = await getAudioDirectory();
@@ -138,7 +138,7 @@ Future<List<LocalSong>> getLocalSongs() async {
 
   return files.map((file) {
     final fileName = p.basename(file.path);
-    log(fileName);
+    Log.d(fileName);
     final match = RegExp(r'\[([a-zA-Z0-9_-]{11})\](?=\.mp3$)').firstMatch(fileName);
     final videoId = match?.group(1);
     String title = fileName;
@@ -164,7 +164,7 @@ Future<File> _getLocalFile(String audioId, Directory dir) async {
   final files = await dir.list().where((e) => e is File).cast<File>().toList();
   final audio = files.firstWhere((f) => f.path.contains(audioId));
   String path= audio.path;
-  log(path);
+  Log.d(path);
   return audio;
 }
 Future<void> deleteFile(String audioId, Directory dir) async {
@@ -173,12 +173,12 @@ Future<void> deleteFile(String audioId, Directory dir) async {
 
     if (await file.exists()) {
       await file.delete();
-      log('borrado exitoso.');
+      Log.d('borrado exitoso.');
     } else {
 
     }
   } catch (e) {
-    log('Error al borrar el archivo: $e');
+    Log.d('Error al borrar el archivo: $e');
   }
 }
 Future<void> saveOrder(Directory folder, List<LocalSong> songs) async {
@@ -190,7 +190,7 @@ Future<void> saveOrder(Directory folder, List<LocalSong> songs) async {
     await orderFile.writeAsString(jsonEncode(order), flush: true);
 
   } catch (e, st) {
-    print('saveOrder ERROR: $e\n$st');
+    Log.d('saveOrder ERROR: $e\n$st');
   }}
 
 
@@ -250,10 +250,10 @@ Future<List<LocalSong>> loadSongsFromFolderOrdered(Directory folder) async {
     }
 
     ordered.addAll(map.values);
-    log("returning ordered");
+    Log.d("returning ordered");
     return ordered;
   } catch (e, st) {
-    log("returning songs");
+    Log.d("returning songs");
     return songs;
 
   }
