@@ -17,7 +17,10 @@ class SessionPage extends StatefulWidget {
   State<SessionPage> createState() => _SessionPageState();
 }
 
-class _SessionPageState extends State<SessionPage> {
+class _SessionPageState extends State<SessionPage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   String? username = "Cargando...";
   String? duoName = "Cargando duo...";
 
@@ -50,6 +53,7 @@ class _SessionPageState extends State<SessionPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 

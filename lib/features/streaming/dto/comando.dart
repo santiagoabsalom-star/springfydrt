@@ -8,7 +8,9 @@ class ComandoDTO {
   final int duration;
   final String seguidor, anfitrion;
   final bool isPlaying;
+  final bool isRepeating;
   ComandoDTO({
+    required this.isRepeating,
     required this.duration,
     required this.comando,
     required this.currentPosition,
@@ -21,6 +23,7 @@ class ComandoDTO {
 
   factory ComandoDTO.fromJson(Map<String, dynamic> json) {
     return ComandoDTO(
+      isRepeating: json['isRepeating'] ?? false,
       isPlaying: json['isPlaying'] ?? true,
       seguidor: json['seguidor'] ?? '',
       duration: json['duration'] ?? 0,

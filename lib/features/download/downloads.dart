@@ -14,7 +14,9 @@ class DownloadedSongsPage extends StatefulWidget {
   State<DownloadedSongsPage> createState() => _DownloadedSongsPageState();
 }
 
-class _DownloadedSongsPageState extends State<DownloadedSongsPage> {
+class _DownloadedSongsPageState extends State<DownloadedSongsPage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   Directory? selectedFolder;
   List<Directory> folders = [];
   List<File> songsInFolder = [];
@@ -78,6 +80,7 @@ void _loadDirectories() {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Biblioteca'),

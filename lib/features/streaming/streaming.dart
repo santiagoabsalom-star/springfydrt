@@ -28,7 +28,9 @@ class StreamingPage extends StatefulWidget {
   State<StreamingPage> createState() => _StreamingPageState();
 }
 
-class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserver {
+class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final ApiCloud _apiCloud = ApiCloud();
   late Future<List<AudioDTO>> _cloudSongs;
   final PcmPlayer _pcmPlayer = PcmPlayer();
@@ -37,6 +39,8 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   final StreamController<DuoState> _stateController =
   StreamController<DuoState>.broadcast();
   DuoState _duoState = DuoState.connecting;
+  bool _isStateRepeating= false;
+  final StreamController<bool> _isStateRepeatingController= StreamController<bool>.broadcast();
 
   IOWebSocketChannel? _channel;
   String? _usuarioActual;
@@ -158,6 +162,8 @@ Future<void> obtenerDuo() async {
     setState(() {
       _isPlaying=false;
     });
+    _isStateRepeating=false;
+    _emitRepeatingState(_isStateRepeating);
     disconnectedFromSession=true;
     if(_duoState == DuoState.hosting){
       _channel!.sink.close();
@@ -191,12 +197,17 @@ Future<void> obtenerDuo() async {
 
     }
   }
+  void _emitRepeatingState(bool isRepeating){
+    _isStateRepeating=isRepeating;
+    _isStateRepeatingController.add(isRepeating);
+  }
   Future<void> disconnectFromPlayer() async {
     setState(() {
       _isPlaying=false;
     });
     if(_duoState == DuoState.hosting){
-
+      _isStateRepeating=false;
+      _emitRepeatingState(_isStateRepeating);
       _resetSlider();
       _sendPlayerCommand('disconnect');
     await _pcmPlayer.stop();
@@ -484,7 +495,11 @@ Future<void> obtenerDuo() async {
   }
 
   Future<void> _handleCommand(ComandoDTO comando) async {
+
     switch (comando.comando) {
+
+
+
       case 'start':
         _resetSlider();
         Log.d("following niggaaaa");
@@ -503,7 +518,7 @@ Future<void> obtenerDuo() async {
               _currentSongIndex = songIndex;
               _currentSong = song;
               _currentSliderValue=comando.currentPosition.toDouble();
-
+              _isStateRepeating= comando.isRepeating;
 
               _hostUser = comando.anfitrion;
               _isFollowerConnected = false;
@@ -515,6 +530,7 @@ Future<void> obtenerDuo() async {
           }
         }
         break;
+
       case 'finished':
         _skipToNextSong();
       case 'duo-connected':
@@ -523,6 +539,19 @@ Future<void> obtenerDuo() async {
           _isDuoConnected= true;
         });
         break;
+      case 'repeating':
+        Log.d("repetir");
+        _resetSlider();
+      break;
+      case 'repeat':
+        Log.d("repetir");
+
+        setState(() {
+          _isStateRepeating=!_isStateRepeating;
+          _emitRepeatingState(_isStateRepeating);
+        });
+        break;
+
       case 'duo-disconnected':
         Log.d("duo desconectado");
         setState(() {
@@ -532,6 +561,8 @@ Future<void> obtenerDuo() async {
         break;
       case 'disconnect':
         Log.d("recibiendo disconnect");
+        _isStateRepeating=false;
+        _emitRepeatingState(_isStateRepeating);
         _resetSlider();
         await _pcmPlayer.stop();
         setState(() {
@@ -780,6 +811,8 @@ Future<void> obtenerDuo() async {
     setState(() {
       _isPlaying=false;
     });
+    _isStateRepeating=false;
+    _emitRepeatingState(_isStateRepeating);
     if(_duoState == DuoState.hosting){
       _sendPlayerCommand('disconnect');
 
@@ -808,6 +841,7 @@ Future<void> obtenerDuo() async {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dúo'),
@@ -1002,6 +1036,21 @@ Future<void> obtenerDuo() async {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                StreamBuilder(stream: _isStateRepeatingController.stream,
+                    initialData: _isStateRepeating, builder: (context,snapshot){
+                  final isRepeating = snapshot.data ?? false;
+                  return IconButton(
+                    icon: Icon(isRepeating ? Icons.repeat_one : Icons.repeat),
+                    onPressed: () {
+
+
+                      _isStateRepeating=!isRepeating;
+                      _sendPlayerCommand('repeat');
+                      _emitRepeatingState(_isStateRepeating);
+
+    });
+    }),
+
                 IconButton(
                   icon: const Icon(Icons.skip_previous),
                   onPressed: () => _skipToPreviousSong(),
@@ -1042,6 +1091,16 @@ Future<void> obtenerDuo() async {
               child: const Text('Desconectar'),
             ),
           ] else ...[
+            StreamBuilder(stream: _isStateRepeatingController.stream,
+                initialData: _isStateRepeating, builder: (context,snapshot){
+                  final isRepeating = snapshot.data ?? false;
+                  return IconButton(
+                      icon: Icon(isRepeating ? Icons.repeat_one : Icons.repeat),
+                      onPressed: () {
+            showTopNotification(context, "Controles manejados por el anfitrión.");
+
+                      });
+                }),
             ElevatedButton(
               onPressed: () {
                 PlayerNotifier.instance.notify();

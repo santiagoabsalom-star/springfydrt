@@ -18,7 +18,9 @@ class CloudPage extends StatefulWidget {
   State<CloudPage> createState() => _CloudPageState();
 }
 
-class _CloudPageState extends State<CloudPage> {
+class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final ApiCloud _apiCloud = ApiCloud();
   final DownloadApi _downloadApi = DownloadApi();
   late Future<List<AudioDTO>> _cloudSongs;
@@ -119,6 +121,7 @@ class _CloudPageState extends State<CloudPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text("Cloud Songs"),

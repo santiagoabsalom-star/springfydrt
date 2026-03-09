@@ -17,6 +17,8 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
+  final PageController _pageController = PageController();
+
   final NavigationController _controller = NavigationController();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   bool _isConnected = true;
@@ -62,9 +64,11 @@ class _MainPageState extends State<MainPage> {
           body: Column(
             children: [
               Expanded(
-                child: IndexedStack(
-                  index: index,
-
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (newIndex) {
+                    _controller.changeTab(newIndex);
+                  },
                   children: const [
                     HomePage(),
                     CloudPage(),
@@ -72,7 +76,7 @@ class _MainPageState extends State<MainPage> {
                     StreamingPage(),
                     SessionPage(),
                   ],
-                ),
+                )
               ),
               const MiniPlayer(),
             ],
@@ -82,12 +86,21 @@ class _MainPageState extends State<MainPage> {
             currentIndex: index,
             onTap: (tappedIndex) {
               if (!_isConnected && tappedIndex != 2) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Internet connection required.'),
-                ));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Internet connection required.'),
+                  ),
+                );
                 return;
               }
+
               _controller.changeTab(tappedIndex);
+
+              _pageController.animateToPage(
+                tappedIndex,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.ease,
+              );
             },
             items: [
               BottomNavigationBarItem(
