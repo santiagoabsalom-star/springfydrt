@@ -41,7 +41,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   DuoState _duoState = DuoState.connecting;
   bool _isStateRepeating= false;
   final StreamController<bool> _isStateRepeatingController= StreamController<bool>.broadcast();
-
+  bool _showPlaylist = true;
   IOWebSocketChannel? _channel;
   String? _usuarioActual;
   String? _nombreDuo;
@@ -174,7 +174,7 @@ Future<void> obtenerDuo() async {
 
       });
     }
-      
+
   }
   Future<void> disconnectFromSession() async{
     setState(() {
@@ -399,6 +399,7 @@ Future<void> obtenerDuo() async {
 
     return connectivityResult != ConnectivityResult.none;
   }
+
   Future<void> _connect() async {
     if (_usuarioActual == null) return;
 
@@ -483,10 +484,8 @@ Future<void> obtenerDuo() async {
           _isFollowerConnected = false;
         });
         _emitState(DuoState.none);
+        showTopNotification(context, "Sesión terminada");
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sesión dúo terminada.')),
-        );
         if (mounted) {
           if (await hasConnection()) {
             _channel = await connect(userHeader);
@@ -549,7 +548,7 @@ Future<void> obtenerDuo() async {
               _currentSliderValue=comando.currentPosition.toDouble();
               _isStateRepeating= comando.isRepeating;
               _currentPlaylist= buildCurrentPlaylist(comando.currentPlaylist);
-              _currentSongDuration= comando.duration;
+
               _hostUser = comando.anfitrion;
               _isFollowerConnected = false;
             });
@@ -918,7 +917,8 @@ setState(() {
 
                 return Row(
                   children: [
-                     Text(_isDuoConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'), // Tu widget al lado del botón
+                     Text(_isDuoConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'),
+
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: () {
@@ -1018,6 +1018,7 @@ setState(() {
               final song = songs[index];
               return ListTile(
                 leading: const Icon(Icons.music_note),
+
                 title: Text(song.title),
                 onTap: () {
 
@@ -1089,43 +1090,22 @@ setState(() {
             ),
           ),
           const SizedBox(height: 16),
+    IconButton(
+    icon: Icon(_showPlaylist ? Icons.expand_less : Icons.expand_more),
+    onPressed: () {
+    setState(() {
+    _showPlaylist = !_showPlaylist;
+    });
+    },
+    ),
 
 
-          Expanded(
-            child: FutureBuilder<List<AudioDTO>>(
-              future: _currentPlaylist,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('No hay canciones en este directorio.'));
-                }
-
-                final songs = snapshot.data!;
-
-                return ListView.builder(
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final song = songs[index];
-                    return ListTile(
-                      leading: const Icon(Icons.music_note),
-                      title: Text(song.nombreAudio),
-                      onTap: () {
-                        if(isHost){
-                        _changeSong(song.audioId);}
-                        else{
-                          showTopNotification(context, "Controles manejados por el anfitrión.");
-                        }
-                      },
-                    );
-                  },
-                );
-              },
+          if (_showPlaylist)
+            Expanded(
+              child: _buildPlaylist(isHost),
             ),
-          )
-          ,
+
+
           const SizedBox(height: 32),
           if (isHost) ...[
             Row(
@@ -1219,6 +1199,61 @@ setState(() {
         ],
       ),
     );
+  }
+  Widget _buildPlaylist(bool isHost) {
+
+      return FutureBuilder<List<AudioDTO>>(
+        future: _currentPlaylist,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No hay canciones en este directorio.'));
+          }
+
+          final songs = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: songs.length,
+            itemBuilder: (context, index) {
+              final song = songs[index];
+              bool isCurrentSong=_currentSong?.audioId == song.audioId;
+
+
+
+
+              return Container(
+                color: isCurrentSong ? Colors.grey : null,
+                child: ListTile(
+                  leading: const Icon(Icons.music_note),
+                  title: Text(
+                    song.nombreAudio,
+                    style: TextStyle(
+                      color: isCurrentSong ? Colors.black : Colors.white,
+                    ),
+
+                  ),
+                  onTap:
+                      () {
+                    setState(() {
+                      if(isHost) {
+                        _changeSong(song.audioId);
+                      }
+                      else{
+
+                        showTopNotification(context,"Controles manejados por el anfitrión." );
+
+                      }
+                    });
+                  },
+                ),
+              );
+            },
+          );
+        },
+      );
   }
   String _formatDuration(Duration d) {
     final hours = d.inHours;
