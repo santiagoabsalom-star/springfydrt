@@ -52,9 +52,11 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   bool _isFollowerConnected = false;
    bool _isPlaying= false;
   Directory? _selectedDirectory;
+  late Future<List<AudioDTO>> _currentPlaylist;
   late Future<List<Directory>> _directoriesFuture;
   bool _isDuoConnected= false;
   int _currentSongDuration=0;
+  late List<String> currentPlaylist;
   bool disconnectedFromSession= false;
   @override
   void initState() {
@@ -141,6 +143,22 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         });
       }
     });
+  }
+  Future<void> _setPlaylist() async {
+
+    final ls = await loadSongsFromFolderOrdered(_selectedDirectory!);
+    final cloudSongs = await _cloudSongs;
+
+    final ids = ls.map((s) => s.videoId).toSet();
+
+    final playlist =
+    cloudSongs.where((song) => ids.contains(song.audioId)).toList();
+
+    setState(() {
+      currentPlaylist=playlist.map((e) => e.audioId).toList();
+      _currentPlaylist = Future.value(playlist);
+
+    });Log.d("Playlist cargada exitosamente");
   }
   void isDuoConnected() {
     Log.d("Enviando verificacion de conexion");
@@ -231,7 +249,18 @@ Future<void> obtenerDuo() async {
     }
   }
 
-  
+  Future<List<AudioDTO>> buildCurrentPlaylist(List<String> currentPlaylist) async {
+    final cloudSongs = await _cloudSongs;
+
+    final songsById = {
+      for (var song in cloudSongs) song.audioId: song
+    };
+
+    return currentPlaylist
+        .map((id) => songsById[id])
+        .whereType<AudioDTO>()
+        .toList();
+  }
   void _emitState(DuoState s) {
     _duoState = s;
     if (!_stateController.isClosed) {
@@ -519,7 +548,8 @@ Future<void> obtenerDuo() async {
               _currentSong = song;
               _currentSliderValue=comando.currentPosition.toDouble();
               _isStateRepeating= comando.isRepeating;
-
+              _currentPlaylist= buildCurrentPlaylist(comando.currentPlaylist);
+              _currentSongDuration= comando.duration;
               _hostUser = comando.anfitrion;
               _isFollowerConnected = false;
             });
@@ -633,7 +663,28 @@ Future<void> obtenerDuo() async {
         Log.d("Comando desconocido recibido: ${comando.comando}");
     }
   }
+Future<void> _changeSong(String songId) async {
+  _resetSlider();
+  setState(() {
+    if(!_isPlaying) _isPlaying=true;
+  });
+  _selectedDirectory= _prevDirectory;
+  final localSongs = await loadSongsFromFolderOrdered(_selectedDirectory!);
+  if (localSongs.isEmpty) return;
+final cloudSongs = await _cloudSongs;
 
+setState(() {
+  _currentSongIndex=localSongs.indexWhere((s) => s.videoId == songId);
+  _currentSong= cloudSongs.firstWhere((s)=> s.audioId==songId);
+});
+
+  if(_currentSongIndex == -1){return;}
+
+
+  _sendPlayerCommand('change', params: {'musicId': songId});
+  await _pcmPlayer.ensureReady();
+  _selectedDirectory=null;
+  }
   Future<void> _skipToNextSong() async {
     _resetSlider();
     setState(() {
@@ -723,7 +774,6 @@ Future<void> obtenerDuo() async {
 
   void _sendPlayerCommand(String command,
       {Map<String, dynamic> params = const {}}) {
-
     final Map<String, dynamic> commandData;
     if(command=='is-duo-connected'){
       Log.d("Enviando verificacion de conexion");
@@ -738,7 +788,6 @@ Future<void> obtenerDuo() async {
       if ((_duoState != DuoState.hosting && _duoState != DuoState.following) ||
           _channel == null) return;
 
-
       if (_duoState == DuoState.hosting) {
         commandData = {
           'comando': command,
@@ -746,6 +795,7 @@ Future<void> obtenerDuo() async {
           'seguidor': _nombreDuo,
           'musicId': _currentSong?.audioId,
           'isPlaying': _isPlaying,
+          'currentPlaylist':  currentPlaylist,
           'currentPosition': _currentSliderValue.toInt(),
 
           ...params,
@@ -759,6 +809,7 @@ Future<void> obtenerDuo() async {
           ...params,
         };
       }
+      Log.d(jsonEncode(commandData));
       _channel!.sink.add(jsonEncode(commandData));
     }
 
@@ -793,13 +844,15 @@ Future<void> obtenerDuo() async {
     }
   PlayerNotifier.instance.notify();
 
-    setState(() {
+    setState(()  {
       _currentSong = songToHost;
       _hostUser = _usuarioActual;
       _currentSongIndex =
           cloudSongs.indexWhere((s) => s.audioId == _currentSong?.audioId);
+
     });
     _emitState(DuoState.hosting);
+
 
     await _pcmPlayer.ensureReady();
 
@@ -933,6 +986,8 @@ Future<void> obtenerDuo() async {
                 onTap: () {
                   setState(() {
                     _selectedDirectory = directory;
+                    _setPlaylist();
+
                   });
                 },
               );
@@ -955,6 +1010,7 @@ Future<void> obtenerDuo() async {
                 child: Text('No hay canciones en este directorio.'));
           }
 
+
           final songs = snapshot.data!;
           return ListView.builder(
             itemCount: songs.length,
@@ -966,6 +1022,7 @@ Future<void> obtenerDuo() async {
                 onTap: () {
 
                   setState(() {
+
                     _prevDirectory= _selectedDirectory;
                     _selectedDirectory = null;
                   });
@@ -1031,6 +1088,44 @@ Future<void> obtenerDuo() async {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+
+
+          Expanded(
+            child: FutureBuilder<List<AudioDTO>>(
+              future: _currentPlaylist,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('No hay canciones en este directorio.'));
+                }
+
+                final songs = snapshot.data!;
+
+                return ListView.builder(
+                  itemCount: songs.length,
+                  itemBuilder: (context, index) {
+                    final song = songs[index];
+                    return ListTile(
+                      leading: const Icon(Icons.music_note),
+                      title: Text(song.nombreAudio),
+                      onTap: () {
+                        if(isHost){
+                        _changeSong(song.audioId);}
+                        else{
+                          showTopNotification(context, "Controles manejados por el anfitrión.");
+                        }
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          )
+          ,
           const SizedBox(height: 32),
           if (isHost) ...[
             Row(

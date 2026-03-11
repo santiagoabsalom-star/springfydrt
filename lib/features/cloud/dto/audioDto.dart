@@ -19,6 +19,13 @@ class AudioDTO {
       audioId: json['audioId'] ?? '',
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'nombreAudio': nombreAudio,
+      'path': path,
+      'audioId': audioId,
+    };
+  }
 
   MediaItem toMediaItem() {
     return MediaItem(

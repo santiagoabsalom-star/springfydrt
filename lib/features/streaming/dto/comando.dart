@@ -1,5 +1,7 @@
 
 
+import 'package:springfydrt/features/cloud/dto/audioDto.dart';
+
 class ComandoDTO {
   final String comando;
   final int currentPosition;
@@ -8,8 +10,10 @@ class ComandoDTO {
   final int duration;
   final String seguidor, anfitrion;
   final bool isPlaying;
+  final List<String> currentPlaylist;
   final bool isRepeating;
   ComandoDTO({
+    required this.currentPlaylist,
     required this.isRepeating,
     required this.duration,
     required this.comando,
@@ -23,6 +27,10 @@ class ComandoDTO {
 
   factory ComandoDTO.fromJson(Map<String, dynamic> json) {
     return ComandoDTO(
+      currentPlaylist: (json['currentPlaylist'] as List?)
+          ?.map((e) => e as String)
+          .toList() ??
+          [],
       isRepeating: json['isRepeating'] ?? false,
       isPlaying: json['isPlaying'] ?? true,
       seguidor: json['seguidor'] ?? '',
