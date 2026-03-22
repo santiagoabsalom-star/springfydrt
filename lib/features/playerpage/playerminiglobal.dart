@@ -1,4 +1,4 @@
-import 'package:audio_service/audio_service.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/playerpage/playerpage.dart';
 import '../../main.dart';
@@ -6,6 +6,8 @@ import '../home/dtos/LocalSong.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -21,13 +23,13 @@ class MiniPlayer extends StatelessWidget {
             final playbackState = playbackStateSnapshot.data;
             final isPlaying = playbackState?.playing ?? false;
             final int? currentIndex = playbackState?.queueIndex;
+            final bool? isPlayingFromDuo = playbackState?.isPlayingFromDuo;
             final List<LocalSong> currentPlaylist = getCurrentPlayList();
             final processingState = playbackState?.processingState ?? AudioProcessingState.idle;
 
             final position = playbackState?.position;
             final duration = mediaItem?.duration ?? Duration.zero;
-            if (mediaItem == null ||
-                processingState == AudioProcessingState.idle) {
+            if ( (mediaItem == null || processingState == AudioProcessingState.idle) || isPlayingFromDuo==true ) {
               return const SizedBox.shrink();
             }
 
@@ -135,7 +137,6 @@ class MiniPlayer extends StatelessWidget {
       },
     );
   }
-
   List<LocalSong> getCurrentPlayList() {
     return audioHandler.queue.value
         .map((mediaItem) =>

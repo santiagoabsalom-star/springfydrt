@@ -2,7 +2,7 @@ import 'dart:async';
 
 
 
-import 'package:audio_service/audio_service.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/cupertino.dart';
 
 import 'package:springfydrt/features/audiohandler/audiohandler.dart';

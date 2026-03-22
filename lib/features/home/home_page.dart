@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:audio_service/audio_service.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import '../../core/directories.dart';
 import '../../main.dart';
 import '../../core/network/api_connect.dart';
@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
       extras: {'videoId': v.videoId},
     )).toList();
 
-    audioHandler.loadPlaylist(mediaItems, startIndex: index);
+    audioHandler.loadPlaylist(mediaItems,false, startIndex: index);
   }
 
   @override

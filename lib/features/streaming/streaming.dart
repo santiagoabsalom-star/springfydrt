@@ -2,19 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:springfydrt/core/directories.dart';
 import 'package:springfydrt/features/home/dtos/LocalSong.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
+import 'package:springfydrt/main.dart';
 import 'package:web_socket_channel/io.dart';
 import '../../core/log.dart';
+import '../../custom/audio_service.dart';
 import '../cloud/api/api_cloud.dart';
 import '../cloud/dto/audioDto.dart';
 import '../login/api/token.dart';
-import 'api/p_c_m_player.dart';
 import 'api/wsconnect.dart';
 import 'dto/comando.dart';
 
@@ -33,7 +33,6 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   bool get wantKeepAlive => true;
   final ApiCloud _apiCloud = ApiCloud();
   late Future<List<AudioDTO>> _cloudSongs;
-  final PcmPlayer _pcmPlayer = PcmPlayer();
   double _currentSliderValue = 0.0;
   Timer? _progressTimer;
   final StreamController<DuoState> _stateController =
@@ -57,7 +56,10 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   bool _isDuoConnected= false;
   int _currentSongDuration=0;
   late List<String> currentPlaylist;
+  final ValueNotifier<double> _progressNotifier = ValueNotifier(0);
   bool disconnectedFromSession= false;
+  StreamSubscription? _audioHandlerSubscription;
+
   @override
   void initState() {
     _startProgressTimer();
@@ -80,6 +82,26 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     );
     _refreshCloudSongs();
     _directoriesFuture = getDirectoriesOnFolder();
+
+    _audioHandlerSubscription = audioHandler.customEvent.listen((event) {
+      if (!mounted) return;
+      if (_duoState == DuoState.hosting) {
+        if (event == 'play') {
+          _sendPlayerCommand('resume');
+          setState(() => _isPlaying = true);
+        } else if (event == 'pause') {
+          _sendPlayerCommand('stop');
+          setState(() => _isPlaying = false);
+        } else if (event == 'skipToNext') {
+          _skipToNextSong();
+        } else if (event == 'skipToPrevious') {
+          _skipToPreviousSong();
+        } else if (event is Map && event['action'] == 'seek') {
+          _sendPlayerCommand('move', params: {'segundosToMove': event['position']});
+          _progressNotifier.value = (event['position'] as int).toDouble();
+        }
+      }
+    });
   }
 
   @override
@@ -90,11 +112,11 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         if(_duoState == DuoState.hosting){
           _channel?.sink.close();
           _sendPlayerCommand('disconnect');
-          _pcmPlayer.stop();
+          audioHandler.stoppcm();
         }
         else{
           _sendPlayerCommand('follower-disconnect');
-          _pcmPlayer.stop();
+          audioHandler.stoppcm();
         }
 
     }
@@ -106,14 +128,15 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   @override
   void dispose() {
     _progressTimer?.cancel();
+    _audioHandlerSubscription?.cancel();
     if(_duoState == DuoState.hosting){
       _sendPlayerCommand('disconnect');
 
-      _pcmPlayer.stop();
+      audioHandler.stoppcm();
     }
     else{
       _sendPlayerCommand('follower-disconnect');
-      _pcmPlayer.stop();
+      audioHandler.stoppcm();
     }
     WidgetsBinding.instance.removeObserver(this);
     StreamFolderNotifier.instance.removeListener(() {
@@ -126,21 +149,24 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     StreamFromPlayerNotifier.instance.removeListener(disconnectFromPlayer);
     _stateController.close();
 
-    _pcmPlayer.close();
+    audioHandler.close();
 
     super.dispose();
   }
   void _resetSlider() {
-    setState(() {
-      _currentSliderValue = 0.0;
-    });
+   _progressNotifier.value= 0.0;
   }
   void _startProgressTimer() {
-    _progressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (_isPlaying && _currentSongDuration > 0) {
-        setState(() {
-          _currentSliderValue = (_currentSliderValue + 1).clamp(0.0, _currentSongDuration.toDouble());
-        });
+        _progressNotifier.value =
+            (_progressNotifier.value + 0.016).clamp(0.0, _currentSongDuration.toDouble());
+        
+        if (_duoState != DuoState.none) {
+          audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+            updatePosition: Duration(milliseconds: (_progressNotifier.value * 1000).toInt()),
+          ));
+        }
       }
     });
   }
@@ -176,6 +202,18 @@ Future<void> obtenerDuo() async {
     }
 
   }
+  Future<void> initializeAudioService()async{
+
+    audioHandler.playFromDuo();
+
+    List<MediaItem> items = [];
+    final playlist = await _currentPlaylist;
+    for(AudioDTO audioDTO in playlist) {
+      items.add(audioDTO.toMediaItem());
+    }
+
+    audioHandler.loadPlaylist(items,true);
+  }
   Future<void> disconnectFromSession() async{
     setState(() {
       _isPlaying=false;
@@ -189,7 +227,7 @@ Future<void> obtenerDuo() async {
 
       _resetSlider();
       _sendPlayerCommand('disconnect');
-      await _pcmPlayer.stop();
+      await audioHandler.stoppcm();
       setState(() {
         _currentSong = null;
         _usuarioActual=null;
@@ -205,7 +243,7 @@ Future<void> obtenerDuo() async {
 
       _channel!.sink.close();
       _channel=null;
-      await _pcmPlayer.stop();
+      await audioHandler.stoppcm();
       _sendPlayerCommand('follower-disconnect');
 
       setState(() {
@@ -228,7 +266,7 @@ Future<void> obtenerDuo() async {
       _emitRepeatingState(_isStateRepeating);
       _resetSlider();
       _sendPlayerCommand('disconnect');
-    await _pcmPlayer.stop();
+    await audioHandler.stoppcm();
     setState(() {
       _currentSong = null;
       _hostUser = null;
@@ -238,7 +276,7 @@ Future<void> obtenerDuo() async {
     _emitState(DuoState.none);
     }
     else{
-      await _pcmPlayer.stop();
+      await audioHandler.stoppcm();
       _sendPlayerCommand('follower-disconnect');
 
       setState(() {
@@ -250,10 +288,12 @@ Future<void> obtenerDuo() async {
   }
 
   Future<List<AudioDTO>> buildCurrentPlaylist(List<String> currentPlaylist) async {
+
     final cloudSongs = await _cloudSongs;
 
     final songsById = {
       for (var song in cloudSongs) song.audioId: song
+
     };
 
     return currentPlaylist
@@ -270,7 +310,7 @@ Future<void> obtenerDuo() async {
 
   Future<void> _initialize() async {
     await _obtainUser();
-    await _pcmPlayer.initialize();
+    await audioHandler.initialize();
 
     _emitState(DuoState.connecting);
 
@@ -463,7 +503,7 @@ Future<void> obtenerDuo() async {
 
           final pcm = PcmArrayInt16(bytes: bd);
 
-          await _pcmPlayer.play(pcm);
+          await audioHandler.playpcm(pcm);
         }
       }, onDone: () async {
         Log.d("WebSocket connection closed.");
@@ -473,7 +513,7 @@ Future<void> obtenerDuo() async {
           return;
 
         }
-        await _pcmPlayer.stop();
+        await audioHandler.stoppcm();
         setState(() {
           _isPlaying= false;
           _currentSongIndex = null;
@@ -498,7 +538,7 @@ Future<void> obtenerDuo() async {
         Log.d("WebSocket error: $error");
         if (!mounted) return;
 
-        await _pcmPlayer.stop();
+        await audioHandler.stoppcm();
         setState(() {
           _currentSong = null;
           _hostUser = null;
@@ -530,7 +570,7 @@ Future<void> obtenerDuo() async {
 
       case 'start':
         _resetSlider();
-        Log.d("following niggaaaa");
+        Log.d("following mode active");
 
         if (_usuarioActual == comando.seguidor) {
           final songs = await _cloudSongs;
@@ -545,7 +585,7 @@ Future<void> obtenerDuo() async {
               _isPlaying=comando.isPlaying;
               _currentSongIndex = songIndex;
               _currentSong = song;
-              _currentSliderValue=comando.currentPosition.toDouble();
+              _progressNotifier.value=comando.currentPosition.toDouble();
               _isStateRepeating= comando.isRepeating;
               _currentPlaylist= buildCurrentPlaylist(comando.currentPlaylist);
 
@@ -553,7 +593,8 @@ Future<void> obtenerDuo() async {
               _isFollowerConnected = false;
             });
             _emitState(DuoState.following);
-            await _pcmPlayer.ensureReady();
+
+
           } else {
             Log.d("Song with ID ${comando.musicId} not found.");
           }
@@ -591,9 +632,10 @@ Future<void> obtenerDuo() async {
       case 'disconnect':
         Log.d("recibiendo disconnect");
         _isStateRepeating=false;
+        _setPlaylist();
         _emitRepeatingState(_isStateRepeating);
         _resetSlider();
-        await _pcmPlayer.stop();
+        await audioHandler.stoppcm();
         setState(() {
           _currentSongDuration=0;
           _isPlaying= false;
@@ -602,6 +644,7 @@ Future<void> obtenerDuo() async {
           _isFollowerConnected = false;
           _currentSongIndex = null;
         });
+        showNoti();
         _emitState(DuoState.none);
         break;
       case 'duration':
@@ -627,19 +670,18 @@ Future<void> obtenerDuo() async {
           Log.d("cambiando a false");
           _isPlaying=false;
         });
-        if (_duoState == DuoState.following) await _pcmPlayer.stop();
+        if (_duoState == DuoState.following) await audioHandler.pausepcm();
         break;
 
       case 'resume':
         setState(() {
           _isPlaying=true;
         });
-        if (_duoState == DuoState.following) await _pcmPlayer.resume();
+        if (_duoState == DuoState.following) await audioHandler.resumepcm();
         break;
       case 'move':
-        setState(() {
-          _currentSliderValue=comando.segundosToMove.toDouble();
-        });
+        _progressNotifier.value = comando.segundosToMove.toDouble() ;
+        break;
       case 'change':
 
         _resetSlider();
@@ -654,7 +696,14 @@ Future<void> obtenerDuo() async {
             _currentSongIndex = newIndex;
             _currentSong = songs[newIndex];
           });
-          await _pcmPlayer.ensureReady();
+          
+          audioHandler.updateNotificationInfo(_currentSong!);
+          audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+              queueIndex: newIndex,
+              playing: true,
+          ));
+
+          await audioHandler.ensureReady();
         }
         break;
 
@@ -679,9 +728,14 @@ setState(() {
 
   if(_currentSongIndex == -1){return;}
 
+  audioHandler.updateNotificationInfo(_currentSong!);
+  audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+      queueIndex: _currentSongIndex,
+      playing: true,
+  ));
 
   _sendPlayerCommand('change', params: {'musicId': songId});
-  await _pcmPlayer.ensureReady();
+  await audioHandler.ensureReady();
   _selectedDirectory=null;
   }
   Future<void> _skipToNextSong() async {
@@ -690,7 +744,6 @@ setState(() {
       if(!_isPlaying) _isPlaying=true;
     });
     _selectedDirectory= _prevDirectory;
-    //sin hacer setState para que no se cambie en ui:DDD
 
     if (_selectedDirectory == null) return;
 
@@ -719,8 +772,15 @@ setState(() {
         _currentSong = nextCloudSong;
         _currentSongIndex = cloudSongs.indexOf(nextCloudSong!);
       });
+
+      audioHandler.updateNotificationInfo(_currentSong!);
+      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+          queueIndex: _currentSongIndex,
+          playing: true,
+      ));
+
       _sendPlayerCommand('change', params: {'musicId': nextCloudSong.audioId});
-      await _pcmPlayer.ensureReady();
+      await audioHandler.ensureReady();
     }
    _selectedDirectory=null;
   }
@@ -759,8 +819,15 @@ setState(() {
         _currentSong = prevCloudSong;
         _currentSongIndex = cloudSongs.indexOf(prevCloudSong!);
       });
+
+      audioHandler.updateNotificationInfo(_currentSong!);
+      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+          queueIndex: _currentSongIndex,
+          playing: true,
+      ));
+
       _sendPlayerCommand('change', params: {'musicId': prevCloudSong.audioId});
-      await _pcmPlayer.ensureReady();
+      await audioHandler.ensureReady();
     }
     _selectedDirectory=null;
   }
@@ -795,7 +862,7 @@ setState(() {
           'musicId': _currentSong?.audioId,
           'isPlaying': _isPlaying,
           'currentPlaylist':  currentPlaylist,
-          'currentPosition': _currentSliderValue.toInt(),
+          'currentPosition': _progressNotifier.value.toInt(),
 
           ...params,
         };
@@ -850,10 +917,17 @@ setState(() {
           cloudSongs.indexWhere((s) => s.audioId == _currentSong?.audioId);
 
     });
+
+    audioHandler.updateNotificationInfo(_currentSong!);
+    audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+        queueIndex: _currentSongIndex,
+        playing: true,
+    ));
+
     _emitState(DuoState.hosting);
 
 
-    await _pcmPlayer.ensureReady();
+    await audioHandler.ensureReady();
 
     _sendPlayerCommand('start');
 
@@ -869,7 +943,7 @@ setState(() {
       _sendPlayerCommand('disconnect');
 
       _resetSlider();
-      await _pcmPlayer.stop();
+      await audioHandler.stoppcm();
       setState(() {
         _currentSong = null;
         _hostUser = null;
@@ -880,7 +954,7 @@ setState(() {
       _emitState(DuoState.none);
     }
     else{
-      await _pcmPlayer.stop();
+      await audioHandler.stoppcm();
 
       _sendPlayerCommand('follower-disconnect');
       setState(() {
@@ -918,7 +992,12 @@ setState(() {
                 return Row(
                   children: [
                      Text(_isDuoConnected ? '$_nombreDuo esta conectado' : '$_nombreDuo esta desconectado'),
-
+                    IconButton(
+                      icon: const Icon(Icons.info_outline),
+                      onPressed: () {
+                   _showInfoDialog();
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: () {
@@ -1021,13 +1100,15 @@ setState(() {
 
                 title: Text(song.title),
                 onTap: () {
-
+                  if(audioHandler.playbackState.value.playing){
+                  audioHandler.reset();
+                  }
+                  initializeAudioService();
                   setState(() {
 
                     _prevDirectory= _selectedDirectory;
                     _selectedDirectory = null;
                   });
-
                   PlayerNotifier.instance.notify();
                   _startHosting(song);
                 },
@@ -1060,34 +1141,43 @@ setState(() {
             textAlign: TextAlign.center,
           ),
           Text(
-            "Santi",
+            "Nigga",
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
-          Slider(
-            min: 0,max: _currentSongDuration.toDouble(),
-            value: _currentSliderValue.clamp(0.0, _currentSongDuration.toDouble()),
-            onChanged: (value) {
-              if(_duoState!=DuoState.hosting){
-                showTopNotification(context, "Controles manejados por el anfitrión.");
-              return;
-              }
-              setState(() {
-                _currentSliderValue = value;
-              });
+          ValueListenableBuilder<double>(
+            valueListenable: _progressNotifier,
+            builder: (context, value, _) {
+              return Slider(
+                min: 0,
+                max: _currentSongDuration.toDouble(),
+                value: value.clamp(0.0, _currentSongDuration.toDouble()),
+                onChanged: (v) {
+                  if(isHost) {
+                    _progressNotifier.value = v;
+                  }
+                  else{
+                    showTopNotification(context, "Controles manejados por el anfitrión.");
+                  }},
+                onChangeEnd: (v) {
+                  if(isHost){
+                  _sendPlayerCommand('move', params: {'segundosToMove': v.toInt()});}else{
+                    showTopNotification(context, "Controles manejados por el anfitrión.");
+                  }
+                },
+              );
             },
-            onChangeEnd: (value) {
-              _sendPlayerCommand('move', params: {'segundosToMove': value.toInt()});
+          ),ValueListenableBuilder<double>(
+            valueListenable: _progressNotifier,
+            builder: (context, value, _) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(_formatDuration(Duration(seconds: value.toInt()))),
+                  Text(_formatDuration(Duration(seconds: _currentSongDuration))),
+                ],
+              );
             },
-          ),Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_formatDuration(Duration(seconds: _currentSliderValue.toInt()))),
-                Text(_formatDuration(Duration(seconds: _currentSongDuration))),
-              ],
-            ),
           ),
           const SizedBox(height: 16),
     IconButton(
@@ -1134,7 +1224,13 @@ setState(() {
                 IconButton(
                   icon: _isPlaying ? const Icon(Icons.pause) : const Icon(Icons.play_arrow),
                   onPressed: () {
-                    _isPlaying ? _sendPlayerCommand('stop')  : _sendPlayerCommand('resume');
+                    if (_isPlaying) {
+                      _sendPlayerCommand('stop');
+                      audioHandler.pausepcm();
+                    } else {
+                      _sendPlayerCommand('resume');
+                      audioHandler.resumepcm();
+                    }
                     setState(() {
                       _isPlaying = !_isPlaying;
                     });
@@ -1160,9 +1256,11 @@ setState(() {
                 setState(() {
                   _selectedDirectory=_prevDirectory;
                   _prevDirectory=null;
-                });// logica cuando se desconecta y conecta no pierda el antiguo directorio
+                });
                 _isPlaying= false;
-                await disconnectFromDuoPlayer();},
+                await disconnectFromDuoPlayer();
+                showNoti();
+                },
               child: const Text('Desconectar'),
             ),
           ] else ...[
@@ -1177,16 +1275,17 @@ setState(() {
                       });
                 }),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+
                 PlayerNotifier.instance.notify();
                 setState(() {
                   _isFollowerConnected = !_isFollowerConnected;
                 });
-
+                showNoti();
                 if (_isFollowerConnected) {
 
                   PlayerNotifier.instance.notify();
-                   _pcmPlayer.ensureReady();
+                   audioHandler.ensureReady();
                 }
                 _sendPlayerCommand(
                     _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
@@ -1199,6 +1298,30 @@ setState(() {
         ],
       ),
     );
+  }
+  Future<void> showNoti()async {
+    final songs = await _cloudSongs;
+    final songIndex = songs.indexWhere((s) => s.audioId == _currentSong?.audioId);
+    if (_isFollowerConnected) {
+      audioHandler.playFromDuo();
+      audioHandler.updateNotificationInfo(_currentSong!);
+      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+        playing: _isPlaying,
+        queueIndex: songIndex,
+        processingState: AudioProcessingState.ready,
+      ));
+      await audioHandler.ensureReady();
+    } else {
+
+      audioHandler.reset();
+
+      await audioHandler.stop();
+
+      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+        playing: false,
+        processingState: AudioProcessingState.idle,
+      ));
+    }
   }
   Widget _buildPlaylist(bool isHost) {
 
@@ -1309,5 +1432,32 @@ setState(() {
     Future.delayed(const Duration(seconds: 2), () {
       entry.remove();
     });
+  }
+
+  void _showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+            content: const Text(
+                'Para garantizar una experiencia óptima y una sincronización precisa en la reproducción compartida, '
+                    'es fundamental contar con una conexión a internet estable y de alta velocidad. '
+                    'Las fluctuaciones en la red podrían afectar la calidad del audio o causar interrupciones durante el uso de esta función.'
+            )
+,
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Aceptar'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        )
+        ;
+
+      },
+    );
+
   }
 }

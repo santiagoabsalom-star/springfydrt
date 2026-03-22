@@ -5,7 +5,7 @@ class PcmPlayer {
   final int sampleRate = 48000;
   final int channelCount = 2;
 
-  bool _isPaused = false;
+  bool isPaused = false;
 
   bool _ready = false;
   Future<void>? _initFuture;
@@ -17,9 +17,9 @@ Future<void>initialize(){
       iosAllowBackgroundAudio: true,
     );
 
-    await FlutterPcmSound.start();
+    FlutterPcmSound.start();
 
-    _isPaused = false;
+    isPaused = false;
     _ready = true;
   }();
 
@@ -28,22 +28,22 @@ Future<void>initialize(){
   Future<void> ensureReady() async{
     if (_ready) return Future.value();
 
-    _isPaused = false;
+    isPaused = false;
     _ready = true;
     FlutterPcmSound.start();
   }
 
   Future<void> play(PcmArrayInt16 buffer) async {
-    if (_isPaused) return;
+    if (isPaused) return;
 
     await ensureReady();
     await FlutterPcmSound.feed(buffer);
   }
 
   Future<void> pause() async {
-    if (_isPaused) return;
+    if (isPaused) return;
 
-    _isPaused = true;
+    isPaused = true;
 
 
     // al hacer release, ya NO está ready
@@ -52,14 +52,14 @@ Future<void>initialize(){
   }
 
   Future<void> resume() async {
-    if (!_isPaused) return;
+    if (!isPaused) return;
 
-    _isPaused = false;
+    isPaused = false;
     await ensureReady();
   }
 
   Future<void> stop() async {
-    _isPaused = true;
+    isPaused = true;
 
     _ready = false;
     _initFuture = null;

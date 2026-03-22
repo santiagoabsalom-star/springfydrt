@@ -269,6 +269,7 @@ void _loadDirectories() {
                     context,
                     MaterialPageRoute(
                       builder: (_) => PlayerPage(
+
                         playlist: list,
                         initialIndex: index,
                       ),

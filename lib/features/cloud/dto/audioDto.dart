@@ -1,11 +1,12 @@
-import 'package:audio_service/audio_service.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 
 class AudioDTO {
   final String nombreAudio;
   final String path;
   final String audioId;
-
+  final int duration;
   AudioDTO({
+    required this.duration,
     required this.nombreAudio,
     required this.path,
     required this.audioId,
@@ -14,6 +15,7 @@ class AudioDTO {
 
   factory AudioDTO.fromJson(Map<String, dynamic> json) {
     return AudioDTO(
+      duration: json['duration'] ?? 0,
       nombreAudio: json['nombreAudio'] ?? '',
       path: json['path'] ?? '',
       audioId: json['audioId'] ?? '',
@@ -21,6 +23,8 @@ class AudioDTO {
   }
   Map<String, dynamic> toJson() {
     return {
+
+      'duration': duration,
       'nombreAudio': nombreAudio,
       'path': path,
       'audioId': audioId,
@@ -32,7 +36,8 @@ class AudioDTO {
       id: path,
       album: "Springfy Cloud",
       title: nombreAudio,
-      artist: "YouTube Content", //
+      duration: Duration(seconds:duration),
+      artist: "Nigger", //
       extras: {'videoId': audioId},
 
       artUri: Uri.parse('https://img.youtube.com/vi/$audioId/0.jpg'),

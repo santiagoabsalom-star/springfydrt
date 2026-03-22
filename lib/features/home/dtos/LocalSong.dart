@@ -1,3 +1,5 @@
+import 'package:springfydrt/custom/audio_service.dart';
+
 class LocalSong {
   late final String title;
   late  String path;
@@ -17,5 +19,15 @@ class LocalSong {
     this.title = title;
   }
 
+  MediaItem toMediaItem() {
+    return MediaItem(
+      id: path,
+      album: "Playlist",
+      title: title,
+      artist: "Nigga",
+      extras: {'videoId': videoId},
 
+      artUri: Uri.parse('https://img.youtube.com/vi/$videoId/0.jpg'),
+    );
+  }
 }

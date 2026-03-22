@@ -1,4 +1,4 @@
-import 'package:audio_service/audio_service.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
 import '../../main.dart';
@@ -26,19 +26,16 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
   bool get wantKeepAlive => true;
   @override
   void initState() {
+    audioHandler.playFromPlayer();
     super.initState();
     PlayerNotifier.instance.addListener(_onDuoModeStarted);
 
     if (!widget.isOpeningFromMiniPlayer) {
-      final mediaItems = widget.playlist.map((song) => MediaItem(
-        id: song.path,
-        title: song.title,
-        artist: "Nigga",
-        extras: {'videoId': song.videoId},
-      )).toList();
+
+      final mediaItems = widget.playlist.map((song) => song.toMediaItem()).toList();
 
       if (mediaItems.isNotEmpty) {
-        audioHandler.loadPlaylist(mediaItems, startIndex: widget.initialIndex ?? 0);
+        audioHandler.loadPlaylist(mediaItems,false, startIndex: widget.initialIndex ?? 0);
       }
     }
   }
