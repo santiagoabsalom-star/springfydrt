@@ -142,6 +142,17 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
                 ),
                 filled: true,
                 fillColor: Theme.of(context).cardColor,
+                suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+
+                          },
+                        )]),
               ),
             ),
           ),
@@ -198,7 +209,8 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
                                 (directory) => {
 
                                   _downloadSong(song, directory!)},
-                              );},
+                              );}
+                  ,
                       ),
               );
             },

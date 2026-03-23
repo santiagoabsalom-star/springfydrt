@@ -112,11 +112,16 @@ void _loadDirectories() {
             onPressed: _refreshData,
           ),
         ],
-        bottom: PreferredSize(
+        bottom: selectedFolder==null ? null:
+
+        PreferredSize(
           preferredSize: const Size.fromHeight(60),
+
           child: Padding(
             padding: const EdgeInsets.all(8.0),
+
             child: TextField(
+
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Buscar por nombre...',
@@ -126,6 +131,16 @@ void _loadDirectories() {
                 ),
                 filled: true,
                 fillColor: Theme.of(context).cardColor,
+                suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+
+                          },
+                        )]),
               ),
             ),
           ),

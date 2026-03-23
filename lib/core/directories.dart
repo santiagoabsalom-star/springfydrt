@@ -252,7 +252,7 @@ Future<List<LocalSong>> loadSongsFromFolderOrdered(Directory folder) async {
     ordered.addAll(map.values);
     Log.d("returning ordered");
     return ordered;
-  } catch (e, st) {
+  } catch (e) {
     Log.d("returning songs");
     return songs;
 

@@ -26,7 +26,7 @@ Future<void>initialize(){
   return _initFuture!;
 }
   Future<void> ensureReady() async{
-    if (_ready) return Future.value();
+    if (_ready) return;
 
     isPaused = false;
     _ready = true;

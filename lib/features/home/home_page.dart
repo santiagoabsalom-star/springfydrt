@@ -81,7 +81,20 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-              ),
+                  suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                  IconButton(
+                  icon: const Icon(Icons.clear, size: 20),
+          onPressed: () {
+            _searchController.clear();
+            _onSearchChanged('');
+          },
+        )]),
+              )
+              ,
+
+
             ),
             Expanded(
               child: ListView.builder(
