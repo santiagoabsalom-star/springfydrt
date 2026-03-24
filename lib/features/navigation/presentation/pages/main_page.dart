@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:preload_page_view/preload_page_view.dart';
 import 'package:springfydrt/features/cloud/cloud.dart';
 import 'package:springfydrt/features/download/downloads.dart';
 import 'package:springfydrt/features/playerpage/playerminiglobal.dart';
 import 'package:springfydrt/features/session/sessionpage.dart';
 import 'package:springfydrt/features/streaming/streaming.dart';
+import '../../../../core/log.dart';
 import '../../../home/home_page.dart';
 import '../../navigation_controller.dart';
 
@@ -17,7 +20,8 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  final PageController _pageController = PageController();
+  final PreloadPageController _pageController = PreloadPageController();
+  final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   final NavigationController _controller = NavigationController();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
@@ -26,6 +30,7 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
+
     _initConnectivity();
     _connectivitySubscription =
         Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
@@ -62,9 +67,11 @@ class _MainPageState extends State<MainPage> {
         return Scaffold(
 
           body: Column(
+
             children: [
               Expanded(
-                child: PageView(
+                child: PreloadPageView(
+                  preloadPagesCount: 4,
                   controller: _pageController,
                   onPageChanged: (newIndex) {
                     _controller.changeTab(newIndex);

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -20,6 +20,8 @@ import '../cloud/dto/audioDto.dart';
 import '../login/api/token.dart';
 import 'api/wsconnect.dart';
 import 'dto/comando.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 enum DuoState { none, connecting, hosting, following }
 void pcmProcessorIsolate(SendPort toMainPort) {
@@ -64,6 +66,8 @@ class StreamingPage extends StatefulWidget {
 }
 
 class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
+//ya reviso te quiero mostrar esto pls :((((
   Isolate? _pcmIsolate;
   SendPort? _toIsolatePort;
   ReceivePort? _fromIsolatePort;
@@ -116,6 +120,74 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
       _toIsolatePort!.send(bytes);
     }
   }
+  Future<void> init()async{
+    tz.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('America/Montevideo'));
+    const androidSettings= AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings= DarwinInitializationSettings();
+    const InitializationSettings initializationSettings= InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+
+    );
+    await notificationsPlugin.initialize(settings:  initializationSettings,
+        onDidReceiveNotificationResponse: (payload){
+          String? payloadString = payload.payload;
+          switch (payloadString) {
+            case "show_Duo":
+              Log.d("show_Duo");
+              break;
+            case "show_duo":
+              Log.d("show_duo");
+              break;
+          }
+
+        }
+    );
+//ESTO ES LO QUE NECESITO PARA HACER LAS NOTIFICACIONES QUE ME PIDES:)))) DESPUES SIGO :)
+  }
+  // INSTANT NOTIFICATIONS:D
+  //TODO: LOGICA DE NOTIFICACIONES PARA RECIBIR 3 NOTIFICACIONES:D
+  //1--Santiago quiere escuchar musica contigo
+  //2--Conectarme
+  //3--Santiago se ha conectado
+  Future<void> showInstantNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String payload
+
+  }) async {
+    await   notificationsPlugin.show(
+        id:1,
+        title: title,
+        body: body,
+
+        notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'instant_notification_channel_id',
+              'Instant notifications',
+              channelDescription: 'Instant notification channel',
+              importance: Importance.max,
+              priority: Priority.max,
+              icon: '@mipmap/ic_launcher',
+              color: Colors.green,
+           //   actions: <AndroidNotificationAction>[
+             //   AndroidNotificationAction(
+               // 'connectFollowing'
+             //   ,"following",
+               // icon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+               // ),
+                //AndroidNotificationAction(
+              //   'Hola',
+                // 'Puto',
+                // cancelNotification: true,
+
+                //)
+              //]
+            )
+        ));
+  }
   @override
   void initState() {
     _startProgressTimer();
@@ -123,7 +195,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     _initialize();
     initIsolate();
     WidgetsBinding.instance.addObserver(this);
-
+    init();
     StreamFromSessionNotifier.instance.addListener(disconnectFromSession);
     StreamFromPlayerNotifier.instance.addListener(disconnectFromPlayer);
     StreamFolderNotifier.instance.addListener(() {
@@ -179,6 +251,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     }
 
     if (state == AppLifecycleState.paused) {
+
       Log.d("App en segundo plano");
     }
   }
@@ -657,8 +730,7 @@ Future<void> obtenerDuo() async {
               _isFollowerConnected = false;
             });
             _emitState(DuoState.following);
-
-
+           //showInstantNotification(id:1, title: "Duo", body: "$_nombreDuo esta escuchando, quieres escuchar?", payload: "show_Duo");
           } else {
             Log.d("Song with ID ${comando.musicId} not found.");
           }
@@ -1347,20 +1419,7 @@ setState(() {
                 }),
             ElevatedButton(
               onPressed: () async {
-
-                PlayerNotifier.instance.notify();
-                setState(() {
-                  _isFollowerConnected = !_isFollowerConnected;
-                });
-
-                showNoti();
-                if (_isFollowerConnected) {
-
-                  PlayerNotifier.instance.notify();
-                   audioHandler.ensureReady();
-                }
-                _sendPlayerCommand(
-                    _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
+              connectDistonnectFollowing();
               },
               child: Text(_isFollowerConnected ? 'Desconectar' : 'Conectar'),
             ),
@@ -1371,6 +1430,23 @@ setState(() {
       ),
     );
   }
+  Future<void> connectDistonnectFollowing()async{
+    PlayerNotifier.instance.notify();
+    setState(() {
+      _isFollowerConnected = !_isFollowerConnected;
+    });
+
+    showNoti();
+    if (_isFollowerConnected) {
+
+      PlayerNotifier.instance.notify();
+      audioHandler.ensureReady();
+    }
+    _sendPlayerCommand(
+        _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
+  }
+
+
   Future<void> showNoti()async {
     final songs = await _cloudSongs;
     final songIndex = songs.indexWhere((s) => s.audioId == _currentSong?.audioId);
