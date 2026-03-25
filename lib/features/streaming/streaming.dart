@@ -49,7 +49,6 @@ void pcmProcessorIsolate(SendPort toMainPort) {
             validLength
         );
 
-        // 4. Enviamos al hilo principal
         toMainPort.send(PcmArrayInt16(bytes: bd));
       } catch (e) {
     Log.d("Error al procesar datos PCM: $e");
@@ -132,14 +131,18 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     );
     await notificationsPlugin.initialize(settings:  initializationSettings,
         onDidReceiveNotificationResponse: (payload){
-          String? payloadString = payload.payload;
-          switch (payloadString) {
-            case "show_Duo":
-              Log.d("show_Duo");
+            final String? actionSelected = payload.actionId ?? payload.payload;
+          switch (actionSelected) {
+            case 'SI':
+              Log.d("SI QUIERES YAAIII");
+              connectDistonnectFollowing();
               break;
-            case "show_duo":
-              Log.d("show_duo");
+            case 'NO':
+              Log.d("NO QUIERES:(");
               break;
+            default:
+              Log.d("No se entendio el mensaje $actionSelected");
+
           }
 
         }
@@ -151,18 +154,17 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   //1--Santiago quiere escuchar musica contigo
   //2--Conectarme
   //3--Santiago se ha conectado
-  Future<void> showInstantNotification({
+  Future<void> showQuestionNotification({
     required int id,
     required String title,
     required String body,
-    required String payload
-
+    required String payload,
   }) async {
     await   notificationsPlugin.show(
         id:1,
         title: title,
         body: body,
-
+        payload: payload,
         notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'instant_notification_channel_id',
@@ -170,24 +172,52 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
               channelDescription: 'Instant notification channel',
               importance: Importance.max,
               priority: Priority.max,
-              icon: '@mipmap/ic_launcher',
-              color: Colors.green,
-           //   actions: <AndroidNotificationAction>[
-             //   AndroidNotificationAction(
-               // 'connectFollowing'
-             //   ,"following",
-               // icon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-               // ),
-                //AndroidNotificationAction(
-              //   'Hola',
-                // 'Puto',
-                // cancelNotification: true,
 
-                //)
-              //]
+              icon: '@mipmap/ic_launcher',
+              color: Colors.green, 
+                actions: <AndroidNotificationAction>[
+                AndroidNotificationAction(
+
+                'SI'
+                , 'SI',
+                showsUserInterface: true,
+                icon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+                ),
+                AndroidNotificationAction(
+                 'NO',
+                 'NO',
+                 showsUserInterface: true,
+                 cancelNotification: true,
+
+                )
+              ]
             )
         ));
   }
+  Future<void> showFollowerConnected({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await   notificationsPlugin.show(
+        id:1,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+                'instant_notification_channel_id',
+                'Instant notifications',
+                channelDescription: 'Instant notification channel',
+                importance: Importance.max,
+                priority: Priority.max,
+
+                icon: '@mipmap/ic_launcher',
+                color: Colors.green,
+
+            )
+        ));
+  }
+
   @override
   void initState() {
     _startProgressTimer();
@@ -423,7 +453,6 @@ Future<void> obtenerDuo() async {
 
     }
   }
-
   Future<List<AudioDTO>> buildCurrentPlaylist(List<String> currentPlaylist) async {
 
     final cloudSongs = await _cloudSongs;
@@ -451,7 +480,6 @@ Future<void> obtenerDuo() async {
       _stateController.add(s);
     }
   }
-
   Future<void> _initialize() async {
     await _obtainUser();
     await audioHandler.initialize();
@@ -481,7 +509,6 @@ Future<void> obtenerDuo() async {
       _emitState(DuoState.none);
     }
   }
-
   Future<void> _obtainUser() async {
     final token = await TokenStorage.getToken();
     Log.d("Token: $token");
@@ -492,7 +519,6 @@ Future<void> obtenerDuo() async {
       Log.d("No se pudo obtener el usuario actual.");
     }
   }
-
   Future<void> _showUserSelectionDialog() async {
     final availableUsers = await allUserNames();
     final currentUser = _usuarioActual;
@@ -575,15 +601,11 @@ Future<void> obtenerDuo() async {
       }
     }
   }
-
-
-
   Future<bool> hasConnection() async {
     final connectivityResult = await Connectivity().checkConnectivity();
 
     return connectivityResult != ConnectivityResult.none;
   }
-
   Future<void> _connect() async {
     if (_usuarioActual == null) return;
 
@@ -698,7 +720,6 @@ Future<void> obtenerDuo() async {
       _emitState(DuoState.none);
     }
   }
-
   Future<void> _handleCommand(ComandoDTO comando) async {
 
     switch (comando.comando) {
@@ -730,7 +751,7 @@ Future<void> obtenerDuo() async {
               _isFollowerConnected = false;
             });
             _emitState(DuoState.following);
-           //showInstantNotification(id:1, title: "Duo", body: "$_nombreDuo esta escuchando, quieres escuchar?", payload: "show_Duo");
+           showQuestionNotification(id:1, title: "Duo", body: "$_nombreDuo esta escuchando ${_currentSong!.nombreAudio}, quieres escuchar?", payload: 'si');
           } else {
             Log.d("Song with ID ${comando.musicId} not found.");
           }
@@ -794,6 +815,7 @@ Future<void> obtenerDuo() async {
         setState(() {
           _isFollowerConnected = true;
         });
+        showFollowerConnected(id:1, title: "Duo", body: "$_nombreDuo se ha conectado");
         break;
       case 'follower-disconnect':
         setState(() {
@@ -856,7 +878,7 @@ Future<void> obtenerDuo() async {
         Log.d("Comando desconocido recibido: ${comando.comando}");
     }
   }
-Future<void> _changeSong(String songId) async {
+  Future<void> _changeSong(String songId) async {
   _resetSlider();
   setState(() {
     if(!_isPlaying) _isPlaying=true;
@@ -929,7 +951,6 @@ setState(() {
     }
    _selectedDirectory=null;
   }
-
   Future<void> _skipToPreviousSong() async {
     _resetSlider();
     setState(() {
@@ -976,13 +997,11 @@ setState(() {
     }
     _selectedDirectory=null;
   }
-
   Future<void> _refreshCloudSongs() async {
     setState(() {
       _cloudSongs = _apiCloud.allOnCloudWav();
     });
   }
-
   void _sendPlayerCommand(String command,
       {Map<String, dynamic> params = const {}}) {
     final Map<String, dynamic> commandData;
@@ -1023,9 +1042,7 @@ setState(() {
       Log.d(jsonEncode(commandData));
       _channel!.sink.add(jsonEncode(commandData));
     }
-
   }
-
   Future<void> _startHosting(LocalSong localSong) async {
 
     _isPlaying=true;
@@ -1073,7 +1090,6 @@ setState(() {
     _sendPlayerCommand('start');
 
   }
-
   Future<void> disconnectFromDuoPlayer() async {
     setState(() {
       _isPlaying=false;
@@ -1106,7 +1122,6 @@ setState(() {
 
     }
   }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -1431,65 +1446,68 @@ setState(() {
     );
   }
   Future<void> connectDistonnectFollowing()async{
-    PlayerNotifier.instance.notify();
-    setState(() {
-      _isFollowerConnected = !_isFollowerConnected;
-    });
-
-    showNoti();
-    if (_isFollowerConnected) {
-
+    if(_duoState==DuoState.following) {
       PlayerNotifier.instance.notify();
-      audioHandler.ensureReady();
+      setState(() {
+        _isFollowerConnected = !_isFollowerConnected;
+      });
+
+      showNoti();
+      if (_isFollowerConnected) {
+        PlayerNotifier.instance.notify();
+        audioHandler.ensureReady();
+      }
+      _sendPlayerCommand(
+          _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
     }
-    _sendPlayerCommand(
-        _isFollowerConnected ? 'follower-connect' : 'follower-disconnect');
-  }
+    else {
+      return;
+    }   }
 
 
-  Future<void> showNoti()async {
-    final songs = await _cloudSongs;
-    final songIndex = songs.indexWhere((s) => s.audioId == _currentSong?.audioId);
-    if (_duoState==DuoState.hosting || (_duoState==DuoState.following && _isDuoConnected) ) {
-      audioHandler.isFromDuo=true;
-      audioHandler.updateNotificationInfo(_currentSong!);
-      if (audioHandler.player.playing) {
+    Future<void> showNoti()async {
+      final songs = await _cloudSongs;
+      final songIndex = songs.indexWhere((s) => s.audioId == _currentSong?.audioId);
+      if (_duoState==DuoState.hosting || (_duoState==DuoState.following && _isDuoConnected) ) {
+        audioHandler.isFromDuo=true;
+        audioHandler.updateNotificationInfo(_currentSong!);
+        if (audioHandler.player.playing) {
+          await audioHandler.player.stop();
+        }
+        if(_duoState==DuoState.hosting){
+          audioHandler.isHost=true;
+        }
+        else{
+          audioHandler.isHost=false;
+        }
+        audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+          isPlayingFromDuo: true,
+          playing: _isPlaying,
+          queueIndex: songIndex,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.pause,
+            MediaControl.stop,
+            MediaControl.skipToNext,
+          ],
+          processingState: AudioProcessingState.ready,
+        ));
         await audioHandler.player.stop();
+        await audioHandler.ensureReady();
+      } else if(_duoState==DuoState.following && _isDuoConnected){
+        audioHandler.isFromDuo=false;
+
+
+        await audioHandler.stop();
+
+        audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
+          playing: false,
+
+          processingState: AudioProcessingState.idle,
+        ));
       }
-      if(_duoState==DuoState.hosting){
-        audioHandler.isHost=true;
-      }
-      else{
-        audioHandler.isHost=false;
-      }
-      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
-        isPlayingFromDuo: true,
-        playing: _isPlaying,
-        queueIndex: songIndex,
-        controls: [
-          MediaControl.skipToPrevious,
-          MediaControl.pause,
-          MediaControl.stop,
-          MediaControl.skipToNext,
-        ],
-        processingState: AudioProcessingState.ready,
-      ));
-      await audioHandler.player.stop();
-      await audioHandler.ensureReady();
-    } else if(_duoState==DuoState.following && _isDuoConnected){
-      audioHandler.isFromDuo=false;
-
-
-      await audioHandler.stop();
-
-      audioHandler.playbackState.add(audioHandler.playbackState.value.copyWith(
-        playing: false,
-
-        processingState: AudioProcessingState.idle,
-      ));
     }
-  }
-  Widget _buildPlaylist(bool isHost) {
+    Widget _buildPlaylist(bool isHost) {
 
       return FutureBuilder<List<AudioDTO>>(
         future: _currentPlaylist,
@@ -1543,87 +1561,87 @@ setState(() {
           );
         },
       );
-  }
-  String _formatDuration(Duration d) {
-    final hours = d.inHours;
-    final minutes = d.inMinutes.remainder(60);
-    final seconds = d.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:'
-          '${minutes.toString().padLeft(2, '0')}:'
-          '${seconds.toString().padLeft(2, '0')}';
-    } else {
-      return '${minutes.toString().padLeft(2, '0')}:'
-          '${seconds.toString().padLeft(2, '0')}';
     }
-  }
-  void showTopNotification(BuildContext context, String message) {
-    final overlay = Overlay.of(context);
+    String _formatDuration(Duration d) {
+      final hours = d.inHours;
+      final minutes = d.inMinutes.remainder(60);
+      final seconds = d.inSeconds.remainder(60);
 
-    late OverlayEntry entry;
+      if (hours > 0) {
+        return '${hours.toString().padLeft(2, '0')}:'
+            '${minutes.toString().padLeft(2, '0')}:'
+            '${seconds.toString().padLeft(2, '0')}';
+      } else {
+        return '${minutes.toString().padLeft(2, '0')}:'
+            '${seconds.toString().padLeft(2, '0')}';
+      }
+    }
+    void showTopNotification(BuildContext context, String message) {
+      final overlay = Overlay.of(context);
 
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 60,
-        left: 0,
-        right: 0,
-        child: Material(
-          color: Colors.transparent,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 10,
-                  )
-                ],
-              ),
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.white),
+      late OverlayEntry entry;
+
+      entry = OverlayEntry(
+        builder: (context) => Positioned(
+          top: 60,
+          left: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 10,
+                    )
+                  ],
+                ),
+                child: Text(
+                  message,
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    overlay.insert(entry);
+      overlay.insert(entry);
 
-    Future.delayed(const Duration(seconds: 2), () {
-      entry.remove();
-    });
-  }
+      Future.delayed(const Duration(seconds: 2), () {
+        entry.remove();
+      });
+    }
 
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
+    void _showInfoDialog() {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
             content: const Text(
                 'Para garantizar una experiencia óptima y una sincronización precisa en la reproducción compartida, '
                     'es fundamental contar con una conexión a internet estable y de alta velocidad. '
                     'Las fluctuaciones en la red podrían afectar la calidad del audio o causar interrupciones durante el uso de esta función.'
             )
-,
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Aceptar'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        )
-        ;
+            ,
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Aceptar'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          )
+          ;
 
-      },
-    );
+        },
+      );
 
+    }
   }
-}
