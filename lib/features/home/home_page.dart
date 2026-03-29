@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/custom/audio_service.dart';
+import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import '../../core/directories.dart';
+import '../../core/log.dart';
 import '../../main.dart';
 import '../../core/network/api_connect.dart';
+import '../cloud/api/api_cloud.dart';
 import '../notifier/notifier.dart';
 import 'api/download_api.dart';
 import 'api/search_api.dart';
@@ -21,7 +24,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
   @override
   bool get wantKeepAlive => true;
   final SearchApi _searchApi = SearchApi();
-
+  final ApiCloud _apiCloud = ApiCloud();
   Timer? _debounce;
   final DownloadApi _downloadApi = DownloadApi();
   final TextEditingController _searchController = TextEditingController();
@@ -30,6 +33,12 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
   final Set<String> _cloudDownloaded = {};
   final Set<String> _localDownloaded = {};
   String _query = '';
+@override
+void initState() {
+  DownloadsNotifier.instance.addListener(setAppAndCloudDownloaded);
+    setAppAndCloudDownloaded();
+    super.initState();
+  }
 
   void _onSearchChanged(String value) {
     _query = value;
@@ -59,7 +68,20 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
 
     audioHandler.loadPlaylist(mediaItems,false, startIndex: index);
   }
+  Future<void> setAppAndCloudDownloaded() async {
+    final cloudSongs = await _apiCloud.allOnCloud();
+    final songsInApp= await getLocalSongs();
+    for(final cloud in  cloudSongs){
+      _cloudDownloaded.add(cloud.audioId);
+    }
 
+    for(final app in songsInApp){
+      Log.d(app.videoId!);
+      _localDownloaded.add(app.videoId!);
+    }
+
+
+  }
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -93,8 +115,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
         )]),
               )
               ,
-
-
             ),
             Expanded(
               child: ListView.builder(
@@ -114,10 +134,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
                     },
                     onLocalDownload: () async {
                     openDownloadDialog().then(
-                          (directory) async => await _downloadApi.saveAudioFromVideo(video, video.videoId, directory!)
-
+                          (directory) async => await saveAudio(video, video.videoId, directory!)
                     );
-                      DownloadsNotifier.instance.notify();
+                    DownloadsNotifier.instance.notify();
+                    StreamFolderNotifier.instance.notify();
                       setState(() => _localDownloaded.add(video.videoId));
                     },
                   );
@@ -128,6 +148,13 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
         ),
       ),
     );
+  }
+  Future<void> saveAudio(VideoInfo info,String videoId,Directory directory)async{
+
+    await _downloadApi.saveAudioFromVideo(info, videoId, directory);
+    DownloadsNotifier.instance.notify();
+    StreamFolderNotifier.instance.notify();
+
   }
   Future<Directory?> openDownloadDialog() {
     return showDialog<Directory>(
@@ -194,6 +221,8 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
       },
     );
   }
+
+
 }
 
 class _SearchResultTile extends StatelessWidget {

@@ -1301,9 +1301,11 @@ setState(() {
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
+          //TODO: ENVOLVER ESTO EN UN "VERTICAL LAYOUT" PARA PONER EMOGIS A UN LADO:D
           ValueListenableBuilder<double>(
             valueListenable: _progressNotifier,
             builder: (context, value, _) {
+
               return Slider(
                 min: 0,
                 max: _currentSongDuration.toDouble(),
@@ -1624,9 +1626,7 @@ setState(() {
         builder: (BuildContext context) {
           return AlertDialog(
             content: const Text(
-                'Para garantizar una experiencia óptima y una sincronización precisa en la reproducción compartida, '
-                    'es fundamental contar con una conexión a internet estable y de alta velocidad. '
-                    'Las fluctuaciones en la red podrían afectar la calidad del audio o causar interrupciones durante el uso de esta función.'
+                'necesitas buen internet pa usar este modo, no me culpes a mi como desarrollador por tener internet de mierda no sea perra ❤️️🤮😈😭.'
             )
             ,
             actions: <Widget>[
