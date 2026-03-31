@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import 'package:springfydrt/features/home/api/download_api.dart';
@@ -187,7 +188,7 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
 
               return ListTile(
                 leading: const Icon(Icons.cloud_queue),
-                title: Text(song.nombreAudio),
+                title: Text(Formatter.format(song.nombreAudio)),
                 subtitle: Text(song.audioId),
                 trailing: isDownloading
                     ? const SizedBox(

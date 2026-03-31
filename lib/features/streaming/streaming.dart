@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:springfydrt/core/text.dart';
 import 'dart:io';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -82,7 +83,8 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   bool _isStateRepeating= false;
   final StreamController<bool> _isStateRepeatingController= StreamController<bool>.broadcast();
   bool _showPlaylist = true;
-  IOWebSocketChannel? _channel;
+  // IOWebSocketChannel? _messagesChannel;
+  IOWebSocketChannel? _pcmchannel;
   String? _usuarioActual;
   int _duracionPlaylist=0;
   String? _nombreDuo;
@@ -101,6 +103,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   final ValueNotifier<double> _progressNotifier = ValueNotifier(0);
   bool disconnectedFromSession= false;
   StreamSubscription? _audioHandlerSubscription;
+  String emojiActual="";
   Future<void> initIsolate() async {
     _fromIsolatePort = ReceivePort();
     _pcmIsolate = await Isolate.spawn(pcmProcessorIsolate, _fromIsolatePort!.sendPort);
@@ -127,7 +130,6 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     const InitializationSettings initializationSettings= InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
-
     );
     await notificationsPlugin.initialize(settings:  initializationSettings,
         onDidReceiveNotificationResponse: (payload){
@@ -194,7 +196,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
             )
         ));
   }
-  Future<void> showFollowerConnected({
+  Future<void> showAnyNotification({
     required int id,
     required String title,
     required String body,
@@ -269,7 +271,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
         Log.d("App cerrada completamente");
 
         if(_duoState == DuoState.hosting){
-          _channel?.sink.close();
+          _pcmchannel?.sink.close();
           _sendPlayerCommand('disconnect');
           audioHandler.stoppcm();
         }
@@ -387,17 +389,18 @@ Future<void> obtenerDuo() async {
     _emitRepeatingState(_isStateRepeating);
     disconnectedFromSession=true;
     if(_duoState == DuoState.hosting){
-      _channel!.sink.close();
-      _channel=null;
+      _pcmchannel!.sink.close();
+      _pcmchannel=null;
 
       _resetSlider();
       _sendPlayerCommand('disconnect');
       await audioHandler.stoppcm();
       setState(() {
+        emojiActual= "";
         _currentSong = null;
         _usuarioActual=null;
         _nombreDuo=null;
-        _channel=null;
+        _pcmchannel=null;
         _hostUser = null;
         _isFollowerConnected = false;
         _currentSongIndex = null;
@@ -406,8 +409,8 @@ Future<void> obtenerDuo() async {
     }
     else{
 
-      _channel!.sink.close();
-      _channel=null;
+      _pcmchannel!.sink.close();
+      _pcmchannel=null;
       await audioHandler.stoppcm();
       _sendPlayerCommand('follower-disconnect');
 
@@ -435,6 +438,7 @@ Future<void> obtenerDuo() async {
       _sendPlayerCommand('disconnect');
     await audioHandler.stoppcm();
     setState(() {
+      emojiActual="";
       _currentSong = null;
       _hostUser = null;
       _isFollowerConnected = false;
@@ -617,7 +621,8 @@ Future<void> obtenerDuo() async {
     try {
       if (mounted) {
         if (await hasConnection()) {
-          _channel = await connect(userHeader);
+          //_messagesChannel = await messageConnect(userHeader);
+          _pcmchannel = await pcmConnect(userHeader);
          WakelockPlus.enable();
         } else {
           Log.d("No hay conexión a internet");
@@ -625,7 +630,7 @@ Future<void> obtenerDuo() async {
       }
 
       isDuoConnected();
-      _channel!.stream.listen((message) async {
+      _pcmchannel!.stream.listen((message) async {
         if (message is String) {
           final comando = ComandoDTO.fromJson(jsonDecode(message));
           Log.d(message.toString());
@@ -687,7 +692,7 @@ Future<void> obtenerDuo() async {
 
         if (mounted) {
           if (await hasConnection()) {
-            _channel = await connect(userHeader);
+            _pcmchannel = await pcmConnect(userHeader);
             Log.d("WebSocket connected.");
           } else {
             Log.d("No hay conexión a internet");
@@ -770,6 +775,13 @@ Future<void> obtenerDuo() async {
         Log.d("repetir");
         _resetSlider();
       break;
+      case 'emoji':
+        Log.d("emoji");
+        setState(() {
+          emojiActual=comando.emoji;
+        });
+        showAnyNotification(id:1, title: "Reaccion", body: "$_nombreDuo ha reaccionado a tu cancion: $emojiActual");
+        break;
       case 'repeat':
         Log.d("repetir");
 
@@ -798,6 +810,7 @@ Future<void> obtenerDuo() async {
           _currentSongDuration=0;
           _isPlaying= false;
           _currentSong = null;
+          emojiActual= "";
           _hostUser = null;
           _isFollowerConnected = false;
           _currentSongIndex = null;
@@ -815,7 +828,7 @@ Future<void> obtenerDuo() async {
         setState(() {
           _isFollowerConnected = true;
         });
-        showFollowerConnected(id:1, title: "Duo", body: "$_nombreDuo se ha conectado");
+        showAnyNotification(id:1, title: "Duo", body: "$_nombreDuo se ha conectado");
         break;
       case 'follower-disconnect':
         setState(() {
@@ -858,6 +871,7 @@ Future<void> obtenerDuo() async {
 
         if (newIndex != -1) {
           setState(() {
+            emojiActual="";
             if(!_isPlaying) _isPlaying=true;
             _currentSongIndex = newIndex;
             _currentSong = songs[newIndex];
@@ -881,6 +895,7 @@ Future<void> obtenerDuo() async {
   Future<void> _changeSong(String songId) async {
   _resetSlider();
   setState(() {
+    emojiActual="";
     if(!_isPlaying) _isPlaying=true;
   });
   _selectedDirectory= _prevDirectory;
@@ -908,6 +923,7 @@ setState(() {
   Future<void> _skipToNextSong() async {
     _resetSlider();
     setState(() {
+      emojiActual="";
       if(!_isPlaying) _isPlaying=true;
     });
     _selectedDirectory= _prevDirectory;
@@ -954,6 +970,7 @@ setState(() {
   Future<void> _skipToPreviousSong() async {
     _resetSlider();
     setState(() {
+      emojiActual="";
       if(!_isPlaying) _isPlaying=true;
     });
     _selectedDirectory= _prevDirectory;
@@ -1012,11 +1029,11 @@ setState(() {
         'anfitrion':_usuarioActual,
         ...params,
       };
-      _channel!.sink.add(jsonEncode(commandData));
+      _pcmchannel!.sink.add(jsonEncode(commandData));
     }
     else {
       if ((_duoState != DuoState.hosting && _duoState != DuoState.following) ||
-          _channel == null) return;
+          _pcmchannel == null) return;
 
       if (_duoState == DuoState.hosting) {
         commandData = {
@@ -1040,13 +1057,13 @@ setState(() {
         };
       }
       Log.d(jsonEncode(commandData));
-      _channel!.sink.add(jsonEncode(commandData));
+      _pcmchannel!.sink.add(jsonEncode(commandData));
     }
   }
   Future<void> _startHosting(LocalSong localSong) async {
 
     _isPlaying=true;
-    if (_channel == null ||
+    if (_pcmchannel == null ||
         _usuarioActual == null ||
         _nombreDuo == null) {
 
@@ -1103,6 +1120,7 @@ setState(() {
       _resetSlider();
       await audioHandler.stoppcm();
       setState(() {
+        emojiActual= "";
         _currentSong = null;
         _hostUser = null;
         _isFollowerConnected = false;
@@ -1292,9 +1310,12 @@ setState(() {
             ),
           const SizedBox(height: 16),
           Text(
-            _currentSong!.nombreAudio,
-            style: Theme.of(context).textTheme.headlineSmall,
+            Formatter.format(_currentSong!.nombreAudio),
+            style: Theme.of(context).textTheme.headlineMedium,
             textAlign: TextAlign.center,
+
+
+
           ),
           Text(
             "Nigga",
@@ -1302,28 +1323,86 @@ setState(() {
             textAlign: TextAlign.center,
           ),
           //TODO: ENVOLVER ESTO EN UN "VERTICAL LAYOUT" PARA PONER EMOGIS A UN LADO:D
+
           ValueListenableBuilder<double>(
             valueListenable: _progressNotifier,
             builder: (context, value, _) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                (isHost && emojiActual.isEmpty) ? Text("") :
+                (isHost && emojiActual.isNotEmpty) ? Text(emojiActual) :
+                    MenuAnchor(
+                      builder: (context, controller,child) {
+                        return IconButton(
+                            icon:  Text(emojiActual.isEmpty ? "😀" : emojiActual
+                            , style: const TextStyle(fontSize: 15),
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
 
-              return Slider(
-                min: 0,
-                max: _currentSongDuration.toDouble(),
-                value: value.clamp(0.0, _currentSongDuration.toDouble()),
-                onChanged: (v) {
-                  if(isHost) {
-                    _progressNotifier.value = v;
-                  }
-                  else{
-                    showTopNotification(context, "Controles manejados por el anfitrión.");
-                  }},
-                onChangeEnd: (v) {
-                  if(isHost){
+                            onPressed: () {
+                              controller.isOpen ? controller.close() : controller.open();
+                      }
+                    );
+
+                      }, menuChildren: [
+                      SizedBox(
+                        width: 250,
+                        height: 50,
+                        child: GridView.count(
+                          primary: false,
+                          crossAxisCount: 5,
+                          padding: const EdgeInsets.all(8),
+                          children: ["❤️", "🤮", "😈", "😭", "👨🏿‍🦲"].map((emoji) {
+                           return Builder(
+                               builder: (context) {
+                              return InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    emojiActual = emoji;
+                                  });
+
+                              _sendPlayerCommand('emoji', params: {'emoji': emoji});
+                                  MenuController.maybeOf(context)?.close();
+                                },
+                                child: Center(
+                                  child: Text(emoji,
+                                      style: const TextStyle(fontSize: 24)),
+                                ),
+                              );
+                            }
+                           );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+
+                    ),
+
+                Expanded(
+                child:
+                Slider(
+              min: 0,
+              max: _currentSongDuration.toDouble(),
+              value: value.clamp(0.0, _currentSongDuration.toDouble()),
+              onChanged: (v) {
+                if(isHost) {
+                  _progressNotifier.value = v;
+                }
+                else{
+                  showTopNotification(context, "Controles manejados por el anfitrión.");
+                }},
+              onChangeEnd: (v) {
+                if(isHost){
                   _sendPlayerCommand('move', params: {'segundosToMove': v.toInt()});}else{
-                    showTopNotification(context, "Controles manejados por el anfitrión.");
-                  }
-                },
-              );
+                  showTopNotification(context, "Controles manejados por el anfitrión.");
+                }
+              },
+            ),)
+
+]
+            );
             },
           ),ValueListenableBuilder<double>(
             valueListenable: _progressNotifier,
@@ -1331,6 +1410,7 @@ setState(() {
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+
                   Text(_formatDuration(Duration(seconds: value.toInt()))),
                   Text(_formatDuration(Duration(seconds: _currentSongDuration))),
                 ],
@@ -1538,7 +1618,7 @@ setState(() {
                 child: ListTile(
                   leading: const Icon(Icons.music_note),
                   title: Text(
-                    song.nombreAudio,
+                    Formatter.format(song.nombreAudio),
                     style: TextStyle(
                       color: isCurrentSong ? Colors.black : Colors.white,
                     ),
@@ -1645,3 +1725,4 @@ setState(() {
 
     }
   }
+

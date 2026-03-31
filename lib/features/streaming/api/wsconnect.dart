@@ -5,19 +5,27 @@ import 'package:springfydrt/core/network/api_connect.dart';
 import 'package:web_socket_channel/io.dart';
 
 import '../../../core/log.dart';
-final Uri streamUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
+final Uri pcmUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
+//final Uri messageUri= Uri.parse("ws://springfy.tplinkdns.com:3051/message");
 ApiConnect _apiConnect= ApiConnect();
 Map<String, String> applicationHeader= {
   'Application-id': 'sp-rin-g-fy-id-application-android/29912/'
 
 };
 
-Future<IOWebSocketChannel> connect(Map<String,String> headers) async {
+Future<IOWebSocketChannel> pcmConnect(Map<String,String> headers) async {
   headers.addAll(applicationHeader);
-return IOWebSocketChannel.connect(streamUri, headers: headers);
+return IOWebSocketChannel.connect(pcmUri, headers: headers);
 
 
 }
+//Future<IOWebSocketChannel> messageConnect(Map<String,String> headers) async {
+  //headers.addAll(applicationHeader);
+//  return IOWebSocketChannel.connect(messageUri, headers: headers);
+
+
+//}
+
 Future<String?> obtainUserConection() async {
   final Response response=await _apiConnect.get("/api/streaming/get-duo");
   if(response.statusCode!=200){

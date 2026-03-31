@@ -11,7 +11,9 @@ class ComandoDTO {
   final bool isPlaying;
   final List<String> currentPlaylist;
   final bool isRepeating;
+  final String emoji;
   ComandoDTO({
+    required this.emoji,
     required this.currentPlaylist,
     required this.isRepeating,
     required this.duration,
@@ -30,6 +32,7 @@ class ComandoDTO {
           ?.map((e) => e as String)
           .toList() ??
           [],
+      emoji: json['emoji'] ?? '',
       isRepeating: json['isRepeating'] ?? false,
       isPlaying: json['isPlaying'] ?? true,
       seguidor: json['seguidor'] ?? '',

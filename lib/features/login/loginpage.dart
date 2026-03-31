@@ -164,7 +164,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // App Logo & Brand
                         const Hero(
                           tag: 'app_logo',
                           child: Image(
@@ -287,9 +286,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     const SizedBox(height: 40),
                                     
                                     SizedBox(
+
                                       width: double.infinity,
                                       height: 56,
-                                      child: ElevatedButton(
+                                      child:
+
+                                        ElevatedButton(
                                         onPressed: _isLoading ? null : _handleLogin,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: colorScheme.primary,
@@ -318,7 +320,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                                 ),
                                               ),
                                       ),
-                                    ),
+
+
+                                      )
+
                                   ],
                                 ),
                               ),
