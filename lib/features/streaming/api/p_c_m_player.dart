@@ -1,6 +1,8 @@
 
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 
+import '../../../core/log.dart';
+
 class PcmPlayer {
   final int sampleRate = 48000;
   final int channelCount = 2;
@@ -30,13 +32,15 @@ Future<void>initialize(){
 
     isPaused = false;
     _ready = true;
-    FlutterPcmSound.start();
+    if(FlutterPcmSound.start()) {
+      Log.d("Feed callback invoked");
+    }
   }
 
   Future<void> play(PcmArrayInt16 buffer) async {
     if (isPaused) return;
 
-    await ensureReady();
+    if(!_ready) await ensureReady();
     await FlutterPcmSound.feed(buffer);
   }
 

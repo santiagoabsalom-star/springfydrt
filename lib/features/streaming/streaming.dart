@@ -83,7 +83,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   bool _isStateRepeating= false;
   final StreamController<bool> _isStateRepeatingController= StreamController<bool>.broadcast();
   bool _showPlaylist = true;
-  // IOWebSocketChannel? _messagesChannel;
+  IOWebSocketChannel? _messagesChannel;
   IOWebSocketChannel? _pcmchannel;
   String? _usuarioActual;
   int _duracionPlaylist=0;
@@ -615,13 +615,13 @@ Future<void> obtenerDuo() async {
 
     Map<String, String> userHeader = {'Usuario': _usuarioActual!};
 
-    bool _wavHeaderSkipped = false;
-    int _wavHeaderBytesPending = 44;
+    bool wavHeaderSkipped = false;
+    int wavHeaderBytesPending = 44;
 
     try {
       if (mounted) {
         if (await hasConnection()) {
-          //_messagesChannel = await messageConnect(userHeader);
+          _messagesChannel = await messageConnect(userHeader);
           _pcmchannel = await pcmConnect(userHeader);
          WakelockPlus.enable();
         } else {
@@ -630,10 +630,19 @@ Future<void> obtenerDuo() async {
       }
 
       isDuoConnected();
+      _messagesChannel!.stream.listen((message) async{
+        if(message is String) {
+          final comando = ComandoDTO.fromJson(jsonDecode(message));
+          Log.d(message);
+          Log.d(comando.comando);
+          await _handleCommand(comando);
+          return;
+        }
+      });
       _pcmchannel!.stream.listen((message) async {
         if (message is String) {
           final comando = ComandoDTO.fromJson(jsonDecode(message));
-          Log.d(message.toString());
+          Log.d(message);
           Log.d(comando.comando);
           await _handleCommand(comando);
           return;
@@ -648,14 +657,14 @@ Future<void> obtenerDuo() async {
            Uint8List bytes= Uint8List.fromList(message);
 
 
-          if (!_wavHeaderSkipped) {
-            if (bytes.length <= _wavHeaderBytesPending) {
-              _wavHeaderBytesPending -= bytes.length;
+          if (!wavHeaderSkipped) {
+            if (bytes.length <= wavHeaderBytesPending) {
+              wavHeaderBytesPending -= bytes.length;
               return;
             } else {
-              bytes = bytes.sublist(_wavHeaderBytesPending);
-              _wavHeaderBytesPending = 0;
-              _wavHeaderSkipped = true;
+              bytes = bytes.sublist(wavHeaderBytesPending);
+              wavHeaderBytesPending = 0;
+              wavHeaderSkipped = true;
             }
           }
 
@@ -1029,11 +1038,13 @@ setState(() {
         'anfitrion':_usuarioActual,
         ...params,
       };
-      _pcmchannel!.sink.add(jsonEncode(commandData));
+      _messagesChannel!.sink.add(jsonEncode(commandData));
     }
     else {
       if ((_duoState != DuoState.hosting && _duoState != DuoState.following) ||
-          _pcmchannel == null) return;
+          _pcmchannel == null || _messagesChannel==null) {
+        return;
+      }
 
       if (_duoState == DuoState.hosting) {
         commandData = {
@@ -1057,7 +1068,7 @@ setState(() {
         };
       }
       Log.d(jsonEncode(commandData));
-      _pcmchannel!.sink.add(jsonEncode(commandData));
+      _messagesChannel!.sink.add(jsonEncode(commandData));
     }
   }
   Future<void> _startHosting(LocalSong localSong) async {
@@ -1537,6 +1548,7 @@ setState(() {
       showNoti();
       if (_isFollowerConnected) {
         PlayerNotifier.instance.notify();
+        Log.d("Ensuring the audiohandler is ready.");
         audioHandler.ensureReady();
       }
       _sendPlayerCommand(
