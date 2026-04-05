@@ -8,7 +8,7 @@ import 'package:springfydrt/features/download/downloads.dart';
 import 'package:springfydrt/features/playerpage/playerminiglobal.dart';
 import 'package:springfydrt/features/session/sessionpage.dart';
 import 'package:springfydrt/features/streaming/streaming.dart';
-import '../../../../core/log.dart';
+
 import '../../../home/home_page.dart';
 import '../../navigation_controller.dart';
 

@@ -6,7 +6,6 @@ import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import 'package:springfydrt/features/home/api/download_api.dart';
 import 'package:springfydrt/features/home/dtos/song_dto.dart';
-import 'package:springfydrt/features/home/dtos/LocalSong.dart';
 import 'package:springfydrt/core/directories.dart';
 
 import '../../core/log.dart';
@@ -25,7 +24,6 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   final ApiCloud _apiCloud = ApiCloud();
   final DownloadApi _downloadApi = DownloadApi();
   late Future<List<AudioDTO>> _cloudSongs;
-  List<LocalSong> _localSongs = [];
   final Set<String> _downloadingIds = {};
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -57,68 +55,53 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   }
 
   Future<void> _refreshLocalSongs() async {
-    final songs = await getLocalSongs();
-    if (mounted) {
-      setState(() {
-        _localSongs = songs;
-      });
-    }
-  }
-
-  bool _isDownloaded(AudioDTO audio) {
-    if(_localSongs.isEmpty) return false;
-    return _localSongs.any((song) => song.videoId == audio.audioId);
-
-
 
   }
+
 
   void _downloadSong(AudioDTO audio, Directory directory) async {
-    if (directory != null) {
-      if (_isDownloaded(audio) || _downloadingIds.contains(audio.audioId))
-        return;
-      Log.d(audio.audioId);
-      setState(() {
-        _downloadingIds.add(audio.audioId);
-      });
+    if (await isSongOnDirectory(audio.audioId, directory) || _downloadingIds.contains(audio.audioId)) return;
+    Log.d(audio.audioId);
+    setState(() {
+      _downloadingIds.add(audio.audioId);
+    });
 
-      try {
-        if (mounted) {
-         showTopNotification(context, "Descargando ${audio.nombreAudio}");
-        }
+    try {
+      if (mounted) {
+       showTopNotification(context, "Descargando ${audio.nombreAudio}");
+      }
 
-        final videoInfo = VideoInfo(
-          videoId: audio.audioId,
-          title: audio.nombreAudio,
-          channelTitle: 'Cloud',
-        );
+      final videoInfo = VideoInfo(
+        videoId: audio.audioId,
+        title: audio.nombreAudio,
+        channelTitle: 'Cloud',
+      );
 
-        await _downloadApi.saveAudioFromVideo(
-          videoInfo,
-          audio.audioId,
-          directory,
-        );
+      await _downloadApi.saveAudioFromVideo(
+        videoInfo,
+        audio.audioId,
+        directory,
+      );
 
-        DownloadsNotifier.instance.notify();
-        StreamFolderNotifier.instance.notify();
-        if (mounted) {
-          showTopNotification(context, "Cancion descargada");
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error al descargar: $e')));
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _downloadingIds.remove(audio.audioId);
-          });
-        }
+      DownloadsNotifier.instance.notify();
+      StreamFolderNotifier.instance.notify();
+      if (mounted) {
+        showTopNotification(context, "Cancion descargada");
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al descargar: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingIds.remove(audio.audioId);
+        });
       }
     }
-  }
+    }
 
   @override
   Widget build(BuildContext context) {
@@ -183,45 +166,54 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
             itemCount: songs.length,
             itemBuilder: (context, index) {
               final song = songs[index];
-              final downloaded = _isDownloaded(song);
-              final isDownloading = _downloadingIds.contains(song.audioId);
 
-              return ListTile(
-                leading: const Icon(Icons.cloud_queue),
-                title: Text(Formatter.format(song.nombreAudio)),
-                subtitle: Text(song.audioId),
-                trailing: isDownloading
-                    ? const SizedBox(
+              final isDownloading = _downloadingIds.contains(song.audioId);
+              return FutureBuilder(
+                future: isSongOnAllDirectories(song.audioId),
+                  builder: (context, snapshot) {
+                    final bool isSongOnAll = snapshot.data ?? false;
+                    return FutureBuilder(
+                        future: isSongOnAnyDirectoryButNotInAll(song.audioId),
+                        builder: (context,snapshot) {
+                          final bool isSonOnAnyButNotInAll = snapshot.data ?? false;
+                    return ListTile(
+                      leading: const Icon(Icons.cloud_queue),
+                      title: Text(Formatter.format(song.nombreAudio)),
+                      subtitle: Text(song.audioId),
+                      trailing: isDownloading
+                          ? const SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : IconButton(
+                          : IconButton(
                         icon: Icon(
-                          downloaded ? Icons.check_circle : Icons.download,
-                          color: downloaded ? Colors.green : null,
+                          isSongOnAll ? Icons.check_circle : Icons.download,
+                          color: (isSonOnAnyButNotInAll || isSongOnAll)?Colors.green : null,
                         ),
-                        onPressed: downloaded
-                            ? null
-                            : () {
-
-                          openDownloadDialog().then(
-
-                                (directory) => {
-
-                                  _downloadSong(song, directory!)},
-                              );}
-                  ,
+                        onPressed:
+                        isSongOnAll ? null :
+                            () async {
+                          final folder = await openDownloadDialog(song.audioId);
+                          if(folder!=null){
+                            _downloadSong(song, folder);
+                        }
+                          else{
+                            showTopNotification(context, "Debes seleccionar una playlist");
+                          }
+                          }
+                        ,
                       ),
-              );
+                    );});
+                  });
             },
           );
-        },
+              },
       ),
     );
   }
 
-  Future<Directory?> openDownloadDialog() {
+  Future<Directory?> openDownloadDialog(String videoId) {
     return showDialog<Directory>(
       context: context,
       builder: (context) {
@@ -241,7 +233,15 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
 
                   Expanded(
                     child: FutureBuilder<List<Directory>>(
-                      future: getDirectoriesOnFolder(),
+                      future: getDirectoriesOnFolder().then((directories) async {
+                        final results = await Future.wait(
+                          directories.map((dir) async {
+                            final exists = await isSongOnDirectory(videoId, dir);
+                            return exists ? null : dir;
+                          }),
+                        );
+                        return results.whereType<Directory>().toList();
+                      }),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
                           return const Center(

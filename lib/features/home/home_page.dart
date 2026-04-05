@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/custom/audio_service.dart';
-import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import '../../core/directories.dart';
-import '../../core/log.dart';
 import '../../main.dart';
 import '../../core/network/api_connect.dart';
 import '../cloud/api/api_cloud.dart';
@@ -31,7 +29,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
 
   List<VideoInfo> _results = [];
   final Set<String> _cloudDownloaded = {};
-  final Set<String> _localDownloaded = {};
+
   String _query = '';
 @override
 void initState() {
@@ -70,15 +68,10 @@ void initState() {
   }
   Future<void> setAppAndCloudDownloaded() async {
     final cloudSongs = await _apiCloud.allOnCloud();
-    final songsInApp= await getLocalSongs();
     for(final cloud in  cloudSongs){
       _cloudDownloaded.add(cloud.audioId);
     }
 
-    for(final app in songsInApp){
-      Log.d(app.videoId!);
-      _localDownloaded.add(app.videoId!);
-    }
 
 
   }
@@ -125,7 +118,6 @@ void initState() {
 
                     video: video,
                     cloudDownloaded: _cloudDownloaded.contains(video.videoId),
-                    localDownloaded: _localDownloaded.contains(video.videoId),
                     onTap: () => _playSong(index),
                     onCloudDownload: () async {
                       await _downloadApi.downloadOnCloud(video.videoId);
@@ -133,12 +125,20 @@ void initState() {
                       setState(() => _cloudDownloaded.add(video.videoId));
                     },
                     onLocalDownload: () async {
-                    openDownloadDialog().then(
-                          (directory) async => await saveAudio(video, video.videoId, directory!)
-                    );
-                    DownloadsNotifier.instance.notify();
-                    StreamFolderNotifier.instance.notify();
-                      setState(() => _localDownloaded.add(video.videoId));
+                    final directory = await openDownloadDialog(video.videoId);
+                    if(directory!=null) {
+
+                      await saveAudio(video, video.videoId, directory);
+                      DownloadsNotifier.instance.notify();
+                      StreamFolderNotifier.instance.notify();
+                      showTopNotification(context, "Cancion guardada en la playlist correctamente");
+                    }
+                    else{
+
+                      showTopNotification(context, "Debes seleccionar una playlist");
+
+                    }
+
                     },
                   );
                 },
@@ -156,7 +156,7 @@ void initState() {
     StreamFolderNotifier.instance.notify();
 
   }
-  Future<Directory?> openDownloadDialog() {
+  Future<Directory?> openDownloadDialog(String videoId) {
     return showDialog<Directory>(
       context: context,
       builder: (context) {
@@ -176,13 +176,24 @@ void initState() {
 
                   Expanded(
                     child: FutureBuilder<List<Directory>>(
-                      future: getDirectoriesOnFolder(),
+                      future: getDirectoriesOnFolder().then((directories) async {
+                        final results = await Future.wait(
+                          directories.map((dir) async {
+                            final exists = await isSongOnDirectory(videoId, dir);
+                            return exists ? null : dir;
+                          }),
+                        );
+                        return results.whereType<Directory>().toList();
+                      }),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
                           return const Center(child: CircularProgressIndicator());
                         }
+                        
 
                         final folders = snapshot.data!;
+
+
                         if (folders.isEmpty) {
                           return const Center(child: Text("No hay playlist, crea una para guardar la cancion"));
                         }
@@ -190,6 +201,8 @@ void initState() {
                         return ListView.builder(
                           itemCount: folders.length,
                           itemBuilder: (context, index) {
+
+
                             final folder = folders[index];
                             final folderName = folder.path.split('/').last;
 
@@ -228,7 +241,7 @@ void initState() {
 class _SearchResultTile extends StatelessWidget {
   final VideoInfo video;
   final bool cloudDownloaded;
-  final bool localDownloaded;
+  
   final VoidCallback onTap;
   final VoidCallback onCloudDownload;
   final VoidCallback onLocalDownload;
@@ -236,20 +249,19 @@ class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({
     required this.video,
     required this.cloudDownloaded,
-    required this.localDownloaded,
+
     required this.onTap,
     required this.onCloudDownload,
     required this.onLocalDownload,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context)  {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-
         leading: const CircleAvatar(child: Icon(Icons.music_note_outlined)),
         title: Text(video.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(video.channelTitle),
@@ -257,18 +269,79 @@ class _SearchResultTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.cloud_download, color: cloudDownloaded ? Colors.green : null),
+              icon: Icon(Icons.cloud_download,
+                  color: cloudDownloaded ? Colors.green : null),
               onPressed: cloudDownloaded ? null : onCloudDownload,
             ),
-            IconButton(
-              icon: Icon(Icons.download, color: localDownloaded ? Colors.green : null),
-              onPressed: cloudDownloaded && !localDownloaded ? onLocalDownload : null,
-            )
+            ListenableBuilder(
+                listenable:DownloadsNotifier.instance,
+                builder: (context,_){
+                  return
+            FutureBuilder<bool>(
+              future: isSongOnAllDirectories(video.videoId),
+              builder: (context, snapshot) {
+                final bool isDownloadedOnAll = snapshot.data ?? false;
+                return
+                FutureBuilder<bool>(
+                  future: isSongOnAnyDirectoryButNotInAll(video.videoId),
+                  builder: (context, snapshot) {
+                    final bool isSongOnAnyDirectoryButNotInAll= snapshot.data ?? false;
 
+                    return IconButton(
+                      icon: Icon(
+                        isDownloadedOnAll ? Icons.check_circle : Icons.download,
+                        color: (isSongOnAnyDirectoryButNotInAll || isDownloadedOnAll)?Colors.green : null,
+                      ),
+                      onPressed: isDownloadedOnAll? null :onLocalDownload,
+                    );
+                  });
+              },
+            );})
           ],
         ),
       ),
     );
   }
 
+}
+void showTopNotification(BuildContext context, String message) {
+  final overlay = Overlay.of(context);
+
+  late OverlayEntry entry;
+
+  entry = OverlayEntry(
+    builder: (context) => Positioned(
+      top: 60,
+      left: 0,
+      right: 0,
+      child: Material(
+        color: Colors.transparent,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                )
+              ],
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  overlay.insert(entry);
+
+  Future.delayed(const Duration(seconds: 1), () {
+    entry.remove();
+  });
 }

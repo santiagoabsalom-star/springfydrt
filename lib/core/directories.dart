@@ -69,6 +69,34 @@ Future<List<Directory>> getDirectoriesOnFolder() async {
     return [];
   }
 }
+Future<bool> isSongOnAllDirectories(String songId)  async {
+  final directories = await getDirectoriesOnFolder();
+
+  for (final dir in directories) {
+    if (!await isSongOnDirectory(songId, dir)) {
+        return false;
+    }
+  }
+  return true;
+
+}
+Future<bool> isSongOnAnyDirectoryButNotInAll(String songId) async{
+  final directories = await getDirectoriesOnFolder();
+  final int dirsl= directories.length;
+  int counter=0;
+  for(final dir in directories){
+    if (await isSongOnDirectory(songId, dir)) {
+      counter++;
+    }
+  }
+  if(counter>0 && counter<dirsl){
+    return true;
+  }
+  return false;
+}
+Future<bool>  isSongOnDirectory(String songId,Directory folder) async {
+  return (await getSongsFromFolder(folder)).any((song) => song.videoId == songId);
+}
 Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
   final files = await getDownloadedMp3sFromFolder(folder);
 
