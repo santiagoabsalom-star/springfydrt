@@ -88,7 +88,9 @@ void _loadDirectories() {
             ? IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
+
             setState(() {
+
               selectedFolder = null;
             });
           },
@@ -103,6 +105,7 @@ void _loadDirectories() {
               if(nombredir== null || nombredir.isEmpty){
                 return;
               }
+
               await createDirectory(nombredir);
               await _refreshData();
               },
@@ -138,7 +141,6 @@ void _loadDirectories() {
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () {
                             _searchController.clear();
-
                           },
                         )]),
               ),
@@ -166,7 +168,8 @@ void _loadDirectories() {
     return ListTile(
     leading: const Icon(Icons.folder),
     title: Text(folderName),
-      trailing:       PopupMenuButton(itemBuilder: (context) =>
+      trailing:
+      PopupMenuButton(itemBuilder: (context) =>
       [
         PopupMenuItem(
             child: TextButton(
@@ -207,7 +210,7 @@ void _loadDirectories() {
     onTap: () {
     setState(() {
     selectedFolder = folder;
-                                });
+    });
                             },
                          );
                      },
@@ -286,12 +289,12 @@ void _loadDirectories() {
                       builder: (_) => PlayerPage(
 
                         playlist: list,
+                        isOpenFromCloud: false,
                         initialIndex: index,
                       ),
                     ),
                   );
-                }
-                ,
+                },
 
               );
 

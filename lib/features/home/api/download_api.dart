@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:springfydrt/features/home/dtos/song_dto.dart';
 
 import '../../../core/downloader/downloader.dart';
@@ -27,7 +27,19 @@ class DownloadApi {
 
     return jsonDecode(response.body);
   }
-
+  Future<Uint8List> sampleOnApp(String videoId) async{
+    final response = await _api.post(
+        '/api/download/sampleOnApp',
+        true,
+        {
+          'videoId': videoId,
+        }
+    );
+    if(response.statusCode != 200){
+      throw Exception('MP3 no encontrado');
+    }
+    return response.bodyBytes;
+  }
   Future<Uint8List> downloadOnApp(String videoId) async {
     final response = await _api.post(
       '/api/download/downloadOnApp',
@@ -46,7 +58,6 @@ class DownloadApi {
 
   Future<File> saveAudioFromVideo(VideoInfo video, String videoId, Directory directory) async {
     final bytes = await downloadOnApp(videoId);
-
     final file = await saveMp3ToStorageWithTitle(
       bytes,
       video.title,
@@ -58,4 +69,22 @@ class DownloadApi {
   }
 
 
+}
+class DownloadParams {
+final VideoInfo videoInfo;
+final String audioId;
+final String directoryPath;
+final RootIsolateToken rootToken;
+DownloadParams(this.videoInfo, this.audioId, this.directoryPath, this.rootToken);
+
+}
+
+Future<void> executeDownloadInBackground(DownloadParams params) async {
+  BackgroundIsolateBinaryMessenger.ensureInitialized(params.rootToken);
+  final api = DownloadApi();
+  await api.saveAudioFromVideo(
+    params.videoInfo,
+    params.audioId,
+    Directory(params.directoryPath),
+  );
 }

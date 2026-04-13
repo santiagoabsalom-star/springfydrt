@@ -52,7 +52,11 @@ class _MainPageState extends State<MainPage> {
       _isConnected = !result.contains(ConnectivityResult.none);
       if (!_isConnected) {
         _controller.value = 2;
-      }
+        _pageController.animateToPage(
+          2,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.ease);
+            }
     });
   }
 
@@ -73,8 +77,14 @@ class _MainPageState extends State<MainPage> {
                 child: PreloadPageView(
                   preloadPagesCount: 4,
                   controller: _pageController,
+                  physics: _isConnected ?
+                  const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
                   onPageChanged: (newIndex) {
-                    _controller.changeTab(newIndex);
+                    if(_isConnected){
+                    _controller.changeTab(newIndex);}
+                    else{
+                      showTopNotification(context, "Tienes que tener internet para navegar");
+                    }
                   },
                   children: const [
                     HomePage(),
@@ -93,12 +103,8 @@ class _MainPageState extends State<MainPage> {
             currentIndex: index,
             onTap: (tappedIndex) {
               if (!_isConnected && tappedIndex != 2) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Internet connection required.'),
-                  ),
-                );
-                return;
+              showTopNotification(context, "Tienes que tener internet para navegar");
+              return;
               }
 
               _controller.changeTab(tappedIndex);

@@ -1,14 +1,20 @@
+import 'dart:async';
 import 'dart:io';
-
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import 'package:springfydrt/features/home/api/download_api.dart';
 import 'package:springfydrt/features/home/dtos/song_dto.dart';
 import 'package:springfydrt/core/directories.dart';
+import 'package:springfydrt/main.dart';
 
 import '../../core/log.dart';
+import '../home/dtos/LocalSong.dart';
 import '../notifier/notifier.dart';
 
 class CloudPage extends StatefulWidget {
@@ -21,7 +27,10 @@ class CloudPage extends StatefulWidget {
 class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
   final ApiCloud _apiCloud = ApiCloud();
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  late bool _isConnected = true;
   final DownloadApi _downloadApi = DownloadApi();
   late Future<List<AudioDTO>> _cloudSongs;
   final Set<String> _downloadingIds = {};
@@ -32,34 +41,41 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   void initState() {
     super.initState();
     _refreshData();
-    DownloadsNotifier.instance.addListener(_refreshLocalSongs);
     CloudNotifier.instance.addListener(_refreshData);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text;
       });
     });
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
   }
 
   @override
   void dispose() {
-    DownloadsNotifier.instance.removeListener(_refreshLocalSongs);
     CloudNotifier.instance.removeListener(_refreshData);
     _searchController.dispose();
+    _connectivitySubscription.cancel();
     super.dispose();
   }
 
-  void _refreshData() {
-    _cloudSongs = _apiCloud.allOnCloud();
-    _refreshLocalSongs();
+  Future<void> _refreshData() async {
+    setState(() {
+      _cloudSongs = _apiCloud.allOnCloud();
+    });
+
+
   }
+  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    setState(() {
+      _isConnected = !result.contains(ConnectivityResult.none);
 
-  Future<void> _refreshLocalSongs() async {
-
+    });
   }
 
 
   void _downloadSong(AudioDTO audio, Directory directory) async {
+
     if (await isSongOnDirectory(audio.audioId, directory) || _downloadingIds.contains(audio.audioId)) return;
     Log.d(audio.audioId);
     setState(() {
@@ -67,6 +83,7 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
     });
 
     try {
+      RootIsolateToken? rootToken= RootIsolateToken.instance;
       if (mounted) {
        showTopNotification(context, "Descargando ${audio.nombreAudio}");
       }
@@ -76,12 +93,13 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
         title: audio.nombreAudio,
         channelTitle: 'Cloud',
       );
-
-      await _downloadApi.saveAudioFromVideo(
+        await compute(executeDownloadInBackground, DownloadParams(
         videoInfo,
         audio.audioId,
-        directory,
-      );
+        directory.path,
+          rootToken!,
+        ));
+
 
       DownloadsNotifier.instance.notify();
       StreamFolderNotifier.instance.notify();
@@ -180,6 +198,14 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
                       leading: const Icon(Icons.cloud_queue),
                       title: Text(Formatter.format(song.nombreAudio)),
                       subtitle: Text(song.audioId),
+                      onTap: () async {
+                          if(_isConnected){
+                          openPlayerFromCloud(context, song);}
+                          else{
+                            showTopNotification(context, "Tienes que tener internet para navegar");
+                          }
+
+                      },
                       trailing: isDownloading
                           ? const SizedBox(
                         width: 24,
@@ -336,5 +362,27 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
       entry.remove();
     });
   }
+  Future<void> openPlayerFromCloud(BuildContext context, AudioDTO song) async {
+    try{
 
+
+
+      showTopNotification(context, "Iniciando cancion");
+    final bytes = await _downloadApi.downloadOnApp(song.audioId);
+      final tempDir = await getTemporaryDirectory();
+
+    final file = File('${tempDir.path}/${song.audioId}.mp3');
+    await file.writeAsBytes(bytes);
+    if (!mounted) return;
+    LocalSong localsong = LocalSong(
+        title: Formatter.format(song.nombreAudio),
+        path: file.path,
+        videoId: song.audioId
+    );
+    StreamFromPlayerNotifier.instance.notify();
+   audioHandler.loadPlaylist([localsong.toMediaItem()], false, startIndex: 0 );
+  } catch (e) {
+  Log.d("Error: $e");
+  }
+}
 }

@@ -1,14 +1,20 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 import '../../core/directories.dart';
+import '../../core/log.dart';
 import '../../main.dart';
 import '../../core/network/api_connect.dart';
 import '../cloud/api/api_cloud.dart';
 import '../notifier/notifier.dart';
 import 'api/download_api.dart';
 import 'api/search_api.dart';
+import 'dtos/LocalSong.dart';
 import 'dtos/song_dto.dart';
 
 class HomePage extends StatefulWidget {
@@ -21,6 +27,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
   @override
   bool get wantKeepAlive => true;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+
+  late bool _isConnected= true;
   final SearchApi _searchApi = SearchApi();
   final ApiCloud _apiCloud = ApiCloud();
   Timer? _debounce;
@@ -35,7 +44,18 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
 void initState() {
   DownloadsNotifier.instance.addListener(setAppAndCloudDownloaded);
     setAppAndCloudDownloaded();
+  _connectivitySubscription =
+      Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
     super.initState();
+
+  }
+  @override
+  void dispose() {
+    super.dispose();
+    _searchController.dispose();
+    _connectivitySubscription.cancel();
+
+    DownloadsNotifier.instance.removeListener(setAppAndCloudDownloaded);
   }
 
   void _onSearchChanged(String value) {
@@ -55,17 +75,7 @@ void initState() {
   }
 
 
-  void _playSong(int index) {
-    final mediaItems = _results.map((v) => MediaItem(
-      id: '${ApiConnect.baseUrl}/api/download/downloadOnApp?videoId=${v.videoId}',
-      album: "Springfy",
-      title: v.title,
-      artist: v.channelTitle,
-      extras: {'videoId': v.videoId},
-    )).toList();
 
-    audioHandler.loadPlaylist(mediaItems,false, startIndex: index);
-  }
   Future<void> setAppAndCloudDownloaded() async {
     final cloudSongs = await _apiCloud.allOnCloud();
     for(final cloud in  cloudSongs){
@@ -75,6 +85,36 @@ void initState() {
 
 
   }
+  Future<void> openPlayerFromCloud(BuildContext context, VideoInfo song) async {
+    try{
+
+
+
+      showTopNotification(context, "Iniciando cancion");
+      final bytes = await _downloadApi.sampleOnApp(song.videoId);
+      final tempDir = await getTemporaryDirectory();
+
+      final file = File('${tempDir.path}/${song.videoId}.mp3');
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      LocalSong localsong = LocalSong(
+          title: song.title,
+          path: file.path,
+          videoId: song.videoId
+      );
+      StreamFromPlayerNotifier.instance.notify();
+      audioHandler.loadPlaylist([localsong.toMediaItem()], false, startIndex: 0 );
+    } catch (e) {
+      Log.d("Error: $e");
+    }
+  }
+  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    setState(() {
+      _isConnected = !result.contains(ConnectivityResult.none);
+
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -118,7 +158,13 @@ void initState() {
 
                     video: video,
                     cloudDownloaded: _cloudDownloaded.contains(video.videoId),
-                    onTap: () => _playSong(index),
+                    onTap: () => {
+                      if(_isConnected){
+                      openPlayerFromCloud(context, video)}else{
+                        showTopNotification(context, "Tienes que tener internet para navegar")
+
+
+                      }},
                     onCloudDownload: () async {
                       await _downloadApi.downloadOnCloud(video.videoId);
                       CloudNotifier.instance.notify();
@@ -150,8 +196,13 @@ void initState() {
     );
   }
   Future<void> saveAudio(VideoInfo info,String videoId,Directory directory)async{
-
-    await _downloadApi.saveAudioFromVideo(info, videoId, directory);
+    RootIsolateToken? rootToken = RootIsolateToken.instance;
+    await compute(executeDownloadInBackground, DownloadParams(
+      info,
+      videoId,
+      directory.path,
+      rootToken!,
+    ));
     DownloadsNotifier.instance.notify();
     StreamFolderNotifier.instance.notify();
 
@@ -261,9 +312,12 @@ class _SearchResultTile extends StatelessWidget {
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
+      child:
+
+      ListTile(
         leading: const CircleAvatar(child: Icon(Icons.music_note_outlined)),
         title: Text(video.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        onTap: onTap,
         subtitle: Text(video.channelTitle),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

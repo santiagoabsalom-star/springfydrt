@@ -16,6 +16,8 @@ Future<void>initialize(){
       channelCount: channelCount,
       iosAllowBackgroundAudio: true,
     );
+    await FlutterPcmSound.setFeedThreshold(sampleRate ~/ 10);
+
 
     FlutterPcmSound.start();
 
@@ -34,11 +36,13 @@ Future<void>initialize(){
   }
 
   Future<void> play(PcmArrayInt16 buffer) async {
-    if (isPaused) return;
+    if (isPaused || !_ready) return;
 
-    await ensureReady();
-    await FlutterPcmSound.feed(buffer);
-  }
+
+
+    FlutterPcmSound.feed(buffer);
+
+}
 
   Future<void> pause() async {
     if (isPaused) return;

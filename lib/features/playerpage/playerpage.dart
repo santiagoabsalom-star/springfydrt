@@ -8,11 +8,13 @@ class PlayerPage extends StatefulWidget {
   final List<LocalSong> playlist;
   final int? initialIndex;
   final bool isOpeningFromMiniPlayer;
+  final bool isOpenFromCloud;
 
   const PlayerPage({
     super.key,
     required this.playlist,
     this.initialIndex,
+    required this.isOpenFromCloud,
     this.isOpeningFromMiniPlayer = false,
   });
 
@@ -21,7 +23,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMixin {
-
+  late final bool isOpenFromCloud= widget.isOpenFromCloud;
   @override
   bool get wantKeepAlive => true;
   @override
@@ -128,13 +130,25 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
                     ),
 
                     const SizedBox(height: 20),
-
-                    Row(
+                    isOpenFromCloud ? Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         IconButton(
+                          iconSize: 80,
+                          icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                          onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
+                        )
+                      ],
+                    )
+                    :
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+
+                        IconButton(
                           iconSize: 25,
                           icon: Icon(
+
                             repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
                             color: repeatMode != AudioServiceRepeatMode.none ? Theme.of(context).colorScheme.primary : Colors.grey,
                           ),

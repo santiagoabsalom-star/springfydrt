@@ -43,6 +43,8 @@ class MiniPlayer extends StatelessWidget {
                         PlayerPage(
                           playlist: currentPlaylist,
                           initialIndex: currentIndex,
+                          isOpenFromCloud: false,
+
                           isOpeningFromMiniPlayer: true,
                         ),
                   ),

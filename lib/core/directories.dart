@@ -97,6 +97,7 @@ Future<bool> isSongOnAnyDirectoryButNotInAll(String songId) async{
 Future<bool>  isSongOnDirectory(String songId,Directory folder) async {
   return (await getSongsFromFolder(folder)).any((song) => song.videoId == songId);
 }
+
 Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
   final files = await getDownloadedMp3sFromFolder(folder);
 

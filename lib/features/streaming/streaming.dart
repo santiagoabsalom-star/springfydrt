@@ -38,9 +38,7 @@ void pcmProcessorIsolate(SendPort toMainPort) {
 
         if (uint8list.isEmpty) return;
 
-        final int validLength = uint8list.length % 2 == 0
-            ? uint8list.length
-            : uint8list.length - 1;
+        final int validLength = uint8list.length & ~1;
 
         if (validLength <= 0) return;
 
@@ -661,7 +659,7 @@ Future<void> obtenerDuo() async {
 
           if (bytes.isEmpty) return;
 
-          if (bytes.lengthInBytes % 2 != 0) {
+        if (bytes.lengthInBytes & ~1 != 0) {
             bytes = bytes.sublist(0, bytes.lengthInBytes - 1);
           }
 
