@@ -5,7 +5,13 @@ workflows:
     pre_clone_scripts:
       - name: Setup SSH
         script: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          touch zoolip && echo '-----BEGIN OPENSSH PRIVATE KEY-----
+          b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+          QyNTUxOQAAACCu3MJvSs5KvnTCBPEeSojA3taEsmuO2lh/Sjfh0ph7OgAAAKBlU7upZVO7
+          qQAAAAtzc2gtZWQyNTUxOQAAACCu3MJvSs5KvnTCBPEeSojA3taEsmuO2lh/Sjfh0ph7Og
+          AAAEBvAaWBnzAuSQmtY0iHtylMOAdUmUo2D6dms3W/vNvFqa7cwm9Kzkq+dMIE8R5KiMDe
+          1oSya47aWH9KN+HSmHs6AAAAGXNhbnRpYWdvYWJzYWxvbUBnbWFpbC5jb20BAgME
+          -----END OPENSSH PRIVATE KEY-----' > zoolip
+          sudo chmod 0600 zoolip
+          eval "$(ssh-agent -s)"
+          ssh-add zoolip
