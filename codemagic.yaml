@@ -5,6 +5,7 @@ workflows:
     pre_clone_scripts:
       - name: Setup SSH
         script: |
+          git config --global --unset-all url."greenhouseci-team@github.com:".insteadOf || true
           git config --global url."git@github.com:".insteadOf "https://github.com/"
           touch zoolip && echo '-----BEGIN OPENSSH PRIVATE KEY-----
           b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
