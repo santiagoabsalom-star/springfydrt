@@ -2,7 +2,7 @@ workflows:
   flutter-app:
     name: Flutter App
     environment:
-      flutter: 3.24.0
+      flutter: 3.22.0
     pre_clone_scripts:
       - name: Setup SSH
         script: |
@@ -21,6 +21,11 @@ workflows:
           sudo rm -rf /Users/builder/clone
 
     scripts:
+        - name: Force Flutter install
+          script: |
+            git clone https://github.com/flutter/flutter.git -b stable --depth 1
+            export PATH="$PATH:`pwd`/flutter/bin"
+            flutter --version
         - name: Debug SSH
           script: |
             ssh -T git@github.com || true      
