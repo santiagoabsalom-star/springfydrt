@@ -22,9 +22,7 @@ workflows:
     scripts:
         - name: Debug SSH
           script: |
-            ssh -T git@github.com || true
-        - name: Get dependencies
-          script: flutter pub get
+            ssh -T git@github.com || true      
 
         - name: Build APK
           script: flutter build apk --release
