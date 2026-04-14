@@ -97,15 +97,15 @@ void _loadDirectories() {
         )
             : null,
         actions: [
-          ? selectedFolder != null ? null:
+
+           ? selectedFolder != null ? null :
           IconButton(
             icon: const Icon(Icons.add),
                 onPressed:() async {
               final nombredir = await openCreateDirDialog();
-              if(nombredir== null || nombredir.isEmpty){
-                return;
-              }
 
+              if(nombredir== null || nombredir.isEmpty){ return;
+              }
               await createDirectory(nombredir);
               await _refreshData();
               },
@@ -141,6 +141,7 @@ void _loadDirectories() {
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () {
                             _searchController.clear();
+
                           },
                         )]),
               ),
