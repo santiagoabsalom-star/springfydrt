@@ -17,6 +17,7 @@ workflows:
           sudo chmod 0600 zoolip
           eval "$(ssh-agent -s)"
           ssh-add zoolip
+          sudo rm -rf /Users/builder/clone
 
     scripts:
         - name: Debug SSH
