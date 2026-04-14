@@ -1,7 +1,8 @@
 workflows:
   flutter-app:
     name: Flutter App
-
+    environment:
+      flutter: 3.24.0
     pre_clone_scripts:
       - name: Setup SSH
         script: |
