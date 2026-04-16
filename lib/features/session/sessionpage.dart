@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:springfydrt/features/login/loginpage.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
+import 'package:springfydrt/features/yourdata/yourdata.dart';
 
 import '../../core/log.dart';
 import '../login/api/token.dart';
@@ -84,6 +86,7 @@ class _SessionPageState extends State<SessionPage> with AutomaticKeepAliveClient
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: const CircleAvatar(
                   child: Icon(Icons.person_outline),
+
                 ),
                 title: Text(
                   username ?? "Usuario",
@@ -119,11 +122,43 @@ class _SessionPageState extends State<SessionPage> with AutomaticKeepAliveClient
                 trailing: const Icon(Icons.chevron_right),
               ),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 300),
             SizedBox(
               width: double.infinity,
               height: 54,
               child: ElevatedButton.icon(
+                 onPressed: () async {
+                   if (mounted) {
+                     Navigator.push(
+                       context,
+                       MaterialPageRoute(builder: (_) => const YourDataPage()),
+                     );
+                   }
+
+                 }
+                 ,
+                icon: const Icon(Icons.analytics_outlined),
+                label: const Text(
+                  'TUS DATOS',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CupertinoColors.systemGrey,
+                  foregroundColor: CupertinoColors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const Padding(padding: EdgeInsets.only(left: 8.0, bottom: 8.0),),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+
+              child: ElevatedButton.icon(
+              icon: const Icon(Icons.logout),
                 onPressed: () async {
                   await TokenStorage.clear();
                   final directory = await getApplicationDocumentsDirectory();
@@ -142,13 +177,14 @@ class _SessionPageState extends State<SessionPage> with AutomaticKeepAliveClient
                     );
                   }
                 },
-                icon: const Icon(Icons.logout),
+
+
                 label: const Text(
                   'CERRAR SESIÓN',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.errorContainer.withOpacity(0.2),
+                  backgroundColor: colorScheme.errorContainer,
                   foregroundColor: colorScheme.error,
                   elevation: 0,
                   shape: RoundedRectangleBorder(

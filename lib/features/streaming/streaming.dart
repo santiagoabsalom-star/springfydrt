@@ -92,6 +92,9 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   String? _hostUser;
   bool _isFollowerConnected = false;
    bool _isPlaying= false;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  late bool _isConnected = true;
+
   Directory? _selectedDirectory;
   late Future<List<AudioDTO>> _currentPlaylist;
   late Future<List<Directory>> _directoriesFuture;
@@ -226,6 +229,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     initIsolate();
     WidgetsBinding.instance.addObserver(this);
     init();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
     StreamFromSessionNotifier.instance.addListener(disconnectFromSession);
     StreamFromPlayerNotifier.instance.addListener(disconnectFromPlayer);
     StreamFolderNotifier.instance.addListener(() {
@@ -263,6 +267,15 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     });
   }
 
+  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    setState(() {
+      _isConnected = !result.contains(ConnectivityResult.none);
+      if(_isConnected){
+        _connect();
+      }
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
@@ -273,6 +286,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
           _sendPlayerCommand('disconnect');
           audioHandler.stoppcm();
         }
+
         else{
           _sendPlayerCommand('follower-disconnect');
           audioHandler.stoppcm();
@@ -280,10 +294,6 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
 
     }
 
-    if (state == AppLifecycleState.paused) {
-
-      Log.d("App en segundo plano");
-    }
   }
   @override
   void dispose() {

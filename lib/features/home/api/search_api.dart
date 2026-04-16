@@ -3,10 +3,9 @@ import 'dart:convert';
 import '../../../core/network/api_connect.dart';
 import '../dtos/song_dto.dart';
 class SearchApi {
-  final ApiConnect _api = ApiConnect();
 
   Future<SongDto> searchByName(String name) async {
-    final response = await _api.post(
+    final response = await ApiConnect.instance.postWithArgs(
       '/api/search/by-name',
       true,
       {

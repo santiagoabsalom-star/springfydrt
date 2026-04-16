@@ -9,10 +9,9 @@ import '../../../core/log.dart';
 import '../../../core/network/api_connect.dart';
 
 class DownloadApi {
-  final ApiConnect _api = ApiConnect();
 
   Future<Map<String, dynamic>> downloadOnCloud(String videoId) async {
-    final response = await _api.post(
+    final response = await ApiConnect.instance.postWithArgs(
       '/api/download/downloadOnCloud',
       true,
       {
@@ -28,7 +27,7 @@ class DownloadApi {
     return jsonDecode(response.body);
   }
   Future<Uint8List> sampleOnApp(String videoId) async{
-    final response = await _api.post(
+    final response = await ApiConnect.instance.postWithArgs(
         '/api/download/sampleOnApp',
         true,
         {
@@ -41,7 +40,7 @@ class DownloadApi {
     return response.bodyBytes;
   }
   Future<Uint8List> downloadOnApp(String videoId) async {
-    final response = await _api.post(
+    final response = await ApiConnect.instance.postWithArgs(
       '/api/download/downloadOnApp',
         true,
       {

@@ -6,9 +6,10 @@ class ApiConnect {
 
 
   static String baseUrl = 'http://springfy.tplinkdns.com:3051';
+  static final instance= ApiConnect._();
+  ApiConnect._();
 
-
-  Future<http.Response> post(
+  Future<http.Response> postWithArgs(
       String path,
       bool auth,
       Map<String, dynamic> body, {
@@ -51,6 +52,30 @@ class ApiConnect {
               'Application-id':'sp-rin-g-fy-id-application-android/29912/',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         });
+
+    return response;
+  }
+  Future<http.Response> post(
+      String path,
+      bool auth,
+     ) async {
+    final uri = Uri.parse('$baseUrl$path');
+    String? token;
+    if (auth) {
+      token = await TokenStorage.getToken();
+    }
+    final response = await http.post(
+      uri,
+      headers: {
+
+
+        'Content-Type': 'application/json',
+        'Application-id':'sp-rin-g-fy-id-application-android/29912/',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+
+      },
+
+    );
 
     return response;
   }

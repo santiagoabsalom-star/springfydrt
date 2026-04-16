@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:springfydrt/features/yourdata/api/usageApi.dart';
 
 import '../../core/directories.dart';
+import '../../core/log.dart';
 import '../home/dtos/LocalSong.dart';
 import '../notifier/notifier.dart';
 import '../playerpage/playerpage.dart';
@@ -14,14 +17,13 @@ class DownloadedSongsPage extends StatefulWidget {
   State<DownloadedSongsPage> createState() => _DownloadedSongsPageState();
 }
 
-class _DownloadedSongsPageState extends State<DownloadedSongsPage> with AutomaticKeepAliveClientMixin {
+class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   Directory? selectedFolder;
   List<Directory> folders = [];
   List<File> songsInFolder = [];
   bool loading = true;
-
   late Future<List<LocalSong>> songs;
 
   final TextEditingController _searchController = TextEditingController();
@@ -32,6 +34,7 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with Automati
     super.initState();
     _loadSongs();
     _loadDirectories();
+
     DownloadsNotifier.instance.addListener(_loadSongs);
     _searchController.addListener(() {
       setState(() {
@@ -39,10 +42,56 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with Automati
       });
     });
     createDirController= TextEditingController();
+    WidgetsBinding.instance.addObserver(this);
+    EmpezarContadorPrimerPlano();
+  }
+  Future<void> sendUsage(String tipo) async {
+    try {
+      if(tipo=="segundo_plano"){
+
+
+
+      }
+      else if(tipo=="primer_plano"){
+
+
+      }
+
+
+    } catch (e) {
+
+      Log.d('Error al enviar el uso: $e');
+    }
+  }
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+      TerminarContadorPrimerPlano();
+      TerminarContadorSegundoPlano();
+      return AppExitResponse.exit;
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+
+
+
+    if(state==AppLifecycleState.resumed){
+    Log.d("Aplicacion en primer plano");
+TerminarContadorSegundoPlano();
+EmpezarContadorPrimerPlano();
+      //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
+
+    }
+    if (state == AppLifecycleState.paused) {
+      TerminarContadorPrimerPlano();
+      EmpezarContadorSegundoPlano();
+
+      //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
+    }
+  }
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     DownloadsNotifier.instance.removeListener(_loadSongs);
 
     _searchController.dispose();

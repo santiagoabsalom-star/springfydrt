@@ -7,7 +7,6 @@ import 'package:web_socket_channel/io.dart';
 import '../../../core/log.dart';
 final Uri pcmUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
 //final Uri messageUri= Uri.parse("ws://springfy.tplinkdns.com:3051/message");
-ApiConnect _apiConnect= ApiConnect();
 Map<String, String> applicationHeader= {
   'Application-id': 'sp-rin-g-fy-id-application-android/29912/'
 
@@ -27,7 +26,7 @@ return IOWebSocketChannel.connect(pcmUri, headers: headers);
 //}
 
 Future<String?> obtainUserConection() async {
-  final Response response=await _apiConnect.get("/api/streaming/get-duo");
+  final Response response=await ApiConnect.instance.get("/api/streaming/get-duo");
   if(response.statusCode!=200){
     return null;
   }
@@ -38,7 +37,7 @@ Future<String?> obtainUserConection() async {
 }
 Future<List<String>> allUserNames() async {
   final Response response =
-  await _apiConnect.get("/api/streaming/get-all-usernames");
+  await ApiConnect.instance.get("/api/streaming/get-all-usernames");
 
   final List<dynamic> data = jsonDecode(response.body);
 
@@ -46,7 +45,7 @@ Future<List<String>> allUserNames() async {
 }
 
 Future<String> createDuo(DuoRequest duorequest) async{
-  final Response response=await _apiConnect.post("/api/streaming/create-duo", true, duorequest.toJson() );
+  final Response response=await ApiConnect.instance.postWithArgs("/api/streaming/create-duo", true, duorequest.toJson() );
     Log.d("Body de la respuesta: ${response.body}");
   return response.body;
 
