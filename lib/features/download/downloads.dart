@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/yourdata/api/usageApi.dart';
 
@@ -9,6 +11,7 @@ import '../../core/log.dart';
 import '../home/dtos/LocalSong.dart';
 import '../notifier/notifier.dart';
 import '../playerpage/playerpage.dart';
+import '../yourdata/api/usage.dart';
 
 class DownloadedSongsPage extends StatefulWidget {
   const DownloadedSongsPage({super.key});
@@ -25,16 +28,22 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
   List<File> songsInFolder = [];
   bool loading = true;
   late Future<List<LocalSong>> songs;
-
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  late bool _isConnected=false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   late TextEditingController createDirController = TextEditingController();
+  int contadorPrimerPlano=0;
+  int contadorSegundoPlano=0;
+  bool primerPlano=true;
   @override
   void initState() {
     super.initState();
     _loadSongs();
+    checkConectivity();
     _loadDirectories();
-
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
     DownloadsNotifier.instance.addListener(_loadSongs);
     _searchController.addListener(() {
       setState(() {
@@ -43,28 +52,42 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
     });
     createDirController= TextEditingController();
     WidgetsBinding.instance.addObserver(this);
+
     EmpezarContadorPrimerPlano();
-  }
-  Future<void> sendUsage(String tipo) async {
-    try {
-      if(tipo=="segundo_plano"){
+  }  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    setState(() {
 
-
-
+      _isConnected = !result.contains(ConnectivityResult.none);
+      if(!_isConnected){
+        if(primerPlano){
+          TerminarContadorSegundoPlanoLocal();
+          EmpezarContadorPrimerPlanoLocal();
+        }
+        else{
+          TerminarContadorPrimerPlanoLocal();
+          EmpezarContadorSegundoPlanoLocal();
+        }
       }
-      else if(tipo=="primer_plano"){
-
-
+      if(_isConnected){
+        Future.microtask(() {
+          Future.delayed(const Duration(seconds: 1), () async {
+            try {
+              if (mounted) {
+                await UsageLocalStorage.syncPendingUsage();
+              }
+            } catch (e) {
+              Log.d("Error de canal evitado: $e");
+            }
+          });
+        });
       }
-
-
-    } catch (e) {
-
-      Log.d('Error al enviar el uso: $e');
-    }
+    });
   }
+
+
   @override
   Future<AppExitResponse> didRequestAppExit() async {
+
       TerminarContadorPrimerPlano();
       TerminarContadorSegundoPlano();
       return AppExitResponse.exit;
@@ -76,24 +99,76 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
 
 
     if(state==AppLifecycleState.resumed){
+      primerPlano=true;
     Log.d("Aplicacion en primer plano");
+    if(_isConnected){
 TerminarContadorSegundoPlano();
-EmpezarContadorPrimerPlano();
+EmpezarContadorPrimerPlano();}
+else{
+Log.d("Empezando contador primerPlanoLocal");
+TerminarContadorSegundoPlanoLocal();
+EmpezarContadorPrimerPlanoLocal();
+    }
       //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
-
     }
     if (state == AppLifecycleState.paused) {
-      TerminarContadorPrimerPlano();
-      EmpezarContadorSegundoPlano();
+      primerPlano=false;
+      if(_isConnected) {
+
+        TerminarContadorPrimerPlano();
+        EmpezarContadorSegundoPlano();
+      }
+      else{
+        TerminarContadorPrimerPlanoLocal();
+        EmpezarContadorSegundoPlanoLocal();
+
+      }
+
+
 
       //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
     }
+  }
+
+ void EmpezarContadorSegundoPlanoLocal(){
+    contadorSegundoPlano= DateTime.now().millisecondsSinceEpoch;
+ }
+ void EmpezarContadorPrimerPlanoLocal(){
+    contadorPrimerPlano= DateTime.now().millisecondsSinceEpoch;
+ }
+
+  void TerminarContadorPrimerPlanoLocal() {
+
+    if (contadorPrimerPlano == 0) {
+      Log.d("return ");
+      return;}
+
+    final ahora = DateTime.now().millisecondsSinceEpoch;
+    final segundosTranscurridos = ((ahora - contadorPrimerPlano) / 1000).round();
+
+    contadorPrimerPlano = 0;
+
+    Log.d("segundos: $segundosTranscurridos");
+    UsageLocalStorage.saveUsageLocal(segundosTranscurridos, true);
+  }
+
+  void TerminarContadorSegundoPlanoLocal() {
+    if (contadorSegundoPlano == 0) return;
+
+    final ahora = DateTime.now().millisecondsSinceEpoch;
+    final segundosTranscurridos = ((ahora - contadorSegundoPlano) / 1000).round();
+
+    contadorSegundoPlano = 0;
+
+    Log.d("segundos: $segundosTranscurridos");
+    contadorSegundoPlano = 0;
+    UsageLocalStorage.saveUsageLocal(segundosTranscurridos, false);
   }
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     DownloadsNotifier.instance.removeListener(_loadSongs);
-
+    _connectivitySubscription.cancel();
     _searchController.dispose();
     createDirController.dispose();
     super.dispose();
@@ -533,5 +608,12 @@ void _loadDirectories() {
 
   void close(){
     Navigator.of(context).pop();
+  }
+
+  Future<void> checkConectivity() async {
+    List<ConnectivityResult> result =await Connectivity().checkConnectivity();
+    _isConnected = !result.contains(ConnectivityResult.none);
+
+    _updateConnectionStatus(result);
   }
 }

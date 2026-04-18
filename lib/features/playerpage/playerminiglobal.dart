@@ -56,7 +56,7 @@ class MiniPlayer extends StatelessWidget {
                     .of(context)
                     .colorScheme
                     .surface
-                    .withOpacity(0.98),
+                    ,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

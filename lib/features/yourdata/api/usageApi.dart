@@ -1,5 +1,6 @@
 
 import 'dart:convert';
+import 'dart:ffi';
 
 
 import 'package:springfydrt/features/login/api/dto.dart';
@@ -13,7 +14,7 @@ Future<UsoSemanalDTO> usoSemanalSegundoPlano() async{
   if (response.statusCode != 200) {
     throw Exception('Error al obtener uso semanal de la nube');
   }
-
+  Log.d(response.body);
   return UsoSemanalDTO.fromJson(jsonDecode(response.body));
 
 
@@ -23,29 +24,54 @@ Future<UsoSemanalDTO> usoSemanalPrimerPlano() async{
   if (response.statusCode != 200) {
     throw Exception('Error al obtener uso semanal de la nube');
   }
+ Log.d(response.body);
 
   return UsoSemanalDTO.fromJson(jsonDecode(response.body));
 
 
 }
-Future<UsoDiarioDTO> usoDiarioSegundoPlano() async{
+Future<List<UsoDiarioDTO>> usoDiarioSegundoPlano() async{
   final response = await ApiConnect.instance.get('/api/usage/uso_diario_segundo_plano');
   if (response.statusCode != 200) {
     throw Exception('Error al obtener uso diario de la nube');
   }
-  return UsoDiarioDTO.fromJson(jsonDecode(response.body));
+  Log.d(response.body);
+  return (jsonDecode(response.body) as List)
+      .map((e) => UsoDiarioDTO.fromJson(e))
+      .toList();
 
 
 
 
 }
-Future<UsoDiarioDTO> usoDiarioPrimerPlano() async {
+Future<ResponseBase> registrarUsoDiarioSegundoPlano(UsoDiarioDTO uso)async{
+  final response= await ApiConnect.instance.postWithArgs('/api/usage/registrar_uso_diario_segundo_plano', true,{
+    'usoDiario': uso.usoDiario,
+    "uso": uso.fecha.toIso8601String()
+  });
+  return ResponseBase.fromJson(jsonDecode(response.body));
+
+}
+Future<ResponseBase> registrarUsoDiarioPrimerPlanoPlano(UsoDiarioDTO uso)async{
+  final response= await ApiConnect.instance.postWithArgs('/api/usage/registrar_uso_diario_primer_plano', true,{
+    'usoDiario': uso.usoDiario,
+    "uso": uso.fecha.toIso8601String()
+  });
+  return ResponseBase.fromJson(jsonDecode(response.body));
+
+}
+Future<List<UsoDiarioDTO>> usoDiarioPrimerPlano() async {
   final response = await ApiConnect.instance.get(
       '/api/usage/uso_diario_primer_plano');
   if (response.statusCode != 200) {
     throw Exception('Error al obtener uso diario de la nube');
   }
-  return UsoDiarioDTO.fromJson(jsonDecode(response.body));
+
+  return (jsonDecode(response.body) as List)
+      .map((e) => UsoDiarioDTO.fromJson(e))
+      .toList();
+
+
 }
   Future<ResponseBase> EmpezarContadorSegundoPlano()async{
     final nombre= await TokenStorage.getUsername();
@@ -91,33 +117,58 @@ Future<UsoDiarioDTO> usoDiarioPrimerPlano() async {
 //}
 
 class UsoSemanalDTO {
-  int? usoSemanal;
+  final List<UsoDiarioDTO> usoSemanal;
   UsoSemanalDTO({
-    this.usoSemanal,
+    required this.usoSemanal,
   });
+
+
   factory UsoSemanalDTO.fromJson(Map<String, dynamic> json) {
     return UsoSemanalDTO(
-
-      usoSemanal: json['usoSemanal'],
+      usoSemanal : (json['usoDiario'] as List)
+          .map((e) => UsoDiarioDTO.fromJson(e))
+          .toList(),
     );
   }
 
 
 
 }
+
 class UsoDiarioDTO {
-  int? usoDiario;
+  int usoDiario;
+  DateTime fecha;
   UsoDiarioDTO({
-    this.usoDiario,
+    required this.fecha,
+    required this.usoDiario,
   });
   factory UsoDiarioDTO.fromJson(Map<String, dynamic> json) {
     return UsoDiarioDTO(
+      usoDiario: json['usoDiario'] as int,
+      fecha: parseJavaLocalDateTime(json['uso']),
 
-      usoDiario: json['usoSemanal'],
     );
+  }
+  factory UsoDiarioDTO.fromJsonWithDateTime(Map<String, dynamic> json){
+        UsoDiarioDTO uso= UsoDiarioDTO(fecha: DateTime.tryParse(json['uso']) ?? DateTime.now(),
+    usoDiario: json['usoDiario'] as int? ?? 1);
+
+    return uso;
+
   }
 
 
 
+}
+DateTime parseJavaLocalDateTime(List<dynamic> data) {
+  return DateTime(
+    data[0],
+    data[1],
+    data[2],
+    data[3],
+    data[4],
+    data[5],
+    data[6] ~/ 1000000,
+  );
 }
 

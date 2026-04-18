@@ -119,40 +119,41 @@ class _SessionPageState extends State<SessionPage> with AutomaticKeepAliveClient
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: const Text("Dúo vinculado"),
-                trailing: const Icon(Icons.chevron_right),
               ),
             ),
-            const SizedBox(height: 300),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                 onPressed: () async {
-                   if (mounted) {
-                     Navigator.push(
-                       context,
-                       MaterialPageRoute(builder: (_) => const YourDataPage()),
-                     );
-                   }
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0, bottom: 8.0),
+              child: Text(
+                "Tiempo de uso",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
 
-                 }
-                 ,
-                icon: const Icon(Icons.analytics_outlined),
-                label: const Text(
-                  'TUS DATOS',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: CupertinoColors.systemGrey,
-                  foregroundColor: CupertinoColors.black,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
               ),
             ),
-            const Padding(padding: EdgeInsets.only(left: 8.0, bottom: 8.0),),
+            Card(
+              elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: const CircleAvatar(
+                child: Icon(Icons.analytics_outlined),
+              ),
+              title: const Text(
+                'Tiempo de uso',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text("Tiempo de uso de la aplicación"),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const YourDataPage()),
+                );})),
+
+            const SizedBox(height: 220),
             SizedBox(
               width: double.infinity,
               height: 54,
