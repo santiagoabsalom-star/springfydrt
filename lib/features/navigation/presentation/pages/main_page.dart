@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -10,6 +11,7 @@ import 'package:springfydrt/features/session/sessionpage.dart';
 import 'package:springfydrt/features/streaming/streaming.dart';
 
 import '../../../home/home_page.dart';
+import '../../../notSupportedPlatform/notSupported.dart';
 import '../../navigation_controller.dart';
 
 class MainPage extends StatefulWidget {
@@ -26,16 +28,20 @@ class _MainPageState extends State<MainPage> {
   final NavigationController _controller = NavigationController();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   bool _isConnected = true;
-
+  late bool isPlatformAndroid;
   @override
   void initState() {
     super.initState();
-
+    verifyPlatform();
     _initConnectivity();
     _connectivitySubscription =
         Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
   }
-
+  void verifyPlatform(){
+    if(!Platform.isAndroid){
+      isPlatformAndroid= false;
+    }
+  }
   @override
   void dispose() {
     _connectivitySubscription.cancel();
@@ -86,12 +92,12 @@ class _MainPageState extends State<MainPage> {
                       showTopNotification(context, "Tienes que tener internet para navegar");
                     }
                   },
-                  children: const [
-                    HomePage(),
-                    CloudPage(),
-                    DownloadedSongsPage(),
-                    StreamingPage(),
-                    SessionPage(),
+                  children: [
+                    const HomePage(),
+                    const CloudPage(),
+                    const DownloadedSongsPage(),
+                   const StreamingPage() ,
+                    const SessionPage(),
                   ],
                 )
               ),

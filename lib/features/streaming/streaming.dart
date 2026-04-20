@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:springfydrt/core/text.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -31,11 +32,12 @@ void pcmProcessorIsolate(SendPort toMainPort) {
 
   fromMainPort.listen((message) {
     if (message is List<int>) {
+
       try{
         final Uint8List uint8list = message is Uint8List
             ? message
             : Uint8List.fromList(message);
-
+        if(Platform.isAndroid){
         if (uint8list.isEmpty) return;
 
         final int validLength = uint8list.length & ~1;
@@ -48,12 +50,27 @@ void pcmProcessorIsolate(SendPort toMainPort) {
             validLength
         );
 
-        toMainPort.send(PcmArrayInt16(bytes: bd));
+        toMainPort.send(PcmArrayInt16(bytes: bd));}
+        else{
+          toMainPort.send(pcm16ToFloat32(uint8list));
+        }
+
+
       } catch (e) {
     Log.d("Error al procesar datos PCM: $e");
           }
     }
   });
+}
+Float32List pcm16ToFloat32(Uint8List bytes) {
+  final int16 = Int16List.view(bytes.buffer);
+  final float32 = Float32List(int16.length);
+
+  for (int i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768.0;
+  }
+
+  return float32;
 }
 class StreamingPage extends StatefulWidget {
 
@@ -64,7 +81,7 @@ class StreamingPage extends StatefulWidget {
 }
 
 class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
-  final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final  notificationsPlugin = Platform.isAndroid ? FlutterLocalNotificationsPlugin() : null;
 //ya reviso te quiero mostrar esto pls :((((
   Isolate? _pcmIsolate;
   SendPort? _toIsolatePort;
@@ -112,9 +129,14 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     _fromIsolatePort!.listen((message) {
       if (message is SendPort) {
         _toIsolatePort = message;
-      } else if (message is PcmArrayInt16) {
+      } else if (message is PcmArrayInt16 && Platform.isAndroid) {
+
         audioHandler.playpcm(message);
       }
+      else if(message is Float32List){
+        audioHandler.playmp(message);
+      }
+
     });
   }
 
@@ -124,32 +146,33 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     }
   }
   Future<void> init()async{
-    tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('America/Montevideo'));
-    const androidSettings= AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings iosSettings= DarwinInitializationSettings();
-    const InitializationSettings initializationSettings= InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-    await notificationsPlugin.initialize(settings:  initializationSettings,
-        onDidReceiveNotificationResponse: (payload){
+    if(Platform.isAndroid) {
+      tz.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('America/Montevideo'));
+      const androidSettings = AndroidInitializationSettings(
+          '@mipmap/ic_launcher');
+      const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+      const InitializationSettings initializationSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
+      await notificationsPlugin?.initialize(settings: initializationSettings,
+          onDidReceiveNotificationResponse: (payload) {
             final String? actionSelected = payload.actionId ?? payload.payload;
-          switch (actionSelected) {
-            case 'SI':
-              Log.d("SI QUIERES YAAIII");
-              connectDistonnectFollowing();
-              break;
-            case 'NO':
-              Log.d("NO QUIERES:(");
-              break;
-            default:
-              Log.d("No se entendio el mensaje $actionSelected");
-
+            switch (actionSelected) {
+              case 'SI':
+                Log.d("SI QUIERES YAAIII");
+                connectDistonnectFollowing();
+                break;
+              case 'NO':
+                Log.d("NO QUIERES:(");
+                break;
+              default:
+                Log.d("No se entendio el mensaje $actionSelected");
+            }
           }
-
-        }
-    );
+      );
+    }else{return;}
 //ESTO ES LO QUE NECESITO PARA HACER LAS NOTIFICACIONES QUE ME PIDES:)))) DESPUES SIGO :)
   }
   // INSTANT NOTIFICATIONS:D
@@ -163,12 +186,14 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     required String body,
     required String payload,
   }) async {
-    await   notificationsPlugin.show(
+    if(!Platform.isAndroid){return;}
+    await   notificationsPlugin?.show(
         id:1,
         title: title,
         body: body,
         payload: payload,
         notificationDetails: const NotificationDetails(
+
             android: AndroidNotificationDetails(
               'instant_notification_channel_id',
               'Instant notifications',
@@ -202,7 +227,8 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
     required String title,
     required String body,
   }) async {
-    await   notificationsPlugin.show(
+    if(!Platform.isAndroid){return;}
+    await   notificationsPlugin?.show(
         id:1,
         title: title,
         body: body,

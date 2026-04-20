@@ -59,7 +59,12 @@ class UsageLocalStorage {
           await registrarUsoDiarioSegundoPlano(usuariodto);
         }
 
-        pending.remove(item);
+        if(pending.remove(item)){
+        Log.d("Sincronizacion de registros locales exitosa");
+        }
+        else{
+          Log.d("Error al sincronizar registros locales");
+        }
       } catch (e) {
         Log.d("Error enviando registro local, se reintentará luego: $e");
         break;

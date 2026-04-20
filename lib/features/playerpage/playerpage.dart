@@ -1,3 +1,4 @@
+import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
@@ -95,7 +96,7 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
                     const Spacer(),
 
                     Text(
-                      mediaItem.title,
+                      Formatter.format(mediaItem.title),
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                       maxLines: 2,

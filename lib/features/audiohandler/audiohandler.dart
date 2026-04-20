@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
+import 'package:mp_audio_stream/mp_audio_stream.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
@@ -10,6 +14,8 @@ import '../cloud/dto/audioDto.dart';
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final player = AudioPlayer();
+  final audioStream= getAudioStream();
+
   final PcmPlayer _pcmPlayer = PcmPlayer();
   bool isFromDuo = false;
   final _pcmPlayingSubject = BehaviorSubject<bool>.seeded(false);
@@ -312,11 +318,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   //PCM PLAYER METODOS
   Future<void> initialize() async {
+    if(Platform.isAndroid){
     await _pcmPlayer.initialize();
+    }
+    else{
+
+      audioStream.init(channels: 2,
+      sampleRate: 48000);
+    }
   }
 
   Future<void> resumepcm() async {
-    await _pcmPlayer.resume();
+    if(Platform.isAndroid) {
+      await _pcmPlayer.resume();
+    }else{
+      audioStream.resume();
+    }
     if (isFromDuo) {
       playbackState.add(playbackState.value.copyWith(
         playing: true,
@@ -327,9 +344,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Future<void> ensureReady() async {
-    await _pcmPlayer.ensureReady();
-  }
+    if(Platform.isAndroid){
+    await _pcmPlayer.ensureReady();}else{
 
+
+    }
+  }
+  Future<void> playmp(Float32List buffer) async{
+    audioStream.push(buffer);
+
+  }
   Future<void> playpcm(PcmArrayInt16 buffer) async {
     await _pcmPlayer.play(buffer);
   }

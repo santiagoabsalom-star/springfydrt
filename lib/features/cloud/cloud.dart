@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:springfydrt/core/database/connection.dart';
 import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
@@ -27,7 +28,8 @@ class CloudPage extends StatefulWidget {
 class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
+  int countOfDirectories = 0;
+  final database = MyDatabase.instance;
   final ApiCloud _apiCloud = ApiCloud();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   late bool _isConnected = true;
@@ -37,10 +39,12 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+
   @override
   void initState() {
     super.initState();
     _refreshData();
+
     CloudNotifier.instance.addListener(_refreshData);
     _searchController.addListener(() {
       setState(() {
@@ -60,12 +64,14 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   }
 
   Future<void> _refreshData() async {
+
     setState(() {
       _cloudSongs = _apiCloud.allOnCloud();
     });
 
 
   }
+
   void _updateConnectionStatus(List<ConnectivityResult> result) {
     setState(() {
       _isConnected = !result.contains(ConnectivityResult.none);
@@ -126,117 +132,125 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
     super.build(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Cloud Songs"),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar en la nube...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-
-                        IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
-                          onPressed: () {
-                            _searchController.clear();
-
-                          },
-                        )]),
+    title: const Text("Cloud Songs"),
+      actions: [
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Buscar en la nube...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
+              filled: true,
+              fillColor: Theme.of(context).cardColor,
+              suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+
+                    IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+
+                      },
+                    )]),
             ),
           ),
         ),
       ),
+    ),
       body: FutureBuilder<List<AudioDTO>>(
         future: _cloudSongs,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text("No hay canciones en la nube"));
+          }
+          if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text(snapshot.hasError ? "Error" : "No hay canciones"));
           }
 
-          final songs = snapshot.data!.where((song) {
-            return song.nombreAudio.toLowerCase().contains(
-              _searchQuery.toLowerCase(),
-            );
-          }).toList();
+          final filteredSongs = snapshot.data!.where((song) =>
+              song.nombreAudio.toLowerCase().contains(_searchQuery.toLowerCase())
+          ).toList();
 
-          if (songs.isEmpty && _searchQuery.isNotEmpty) {
-            return const Center(child: Text("No se encontraron coincidencias"));
-          }
-          return ListView.builder(
-            itemCount: songs.length,
-            itemBuilder: (context, index) {
-              final song = songs[index];
 
-              final isDownloading = _downloadingIds.contains(song.audioId);
-              return FutureBuilder(
-                future: isSongOnAllDirectories(song.audioId),
-                  builder: (context, snapshot) {
-                    final bool isSongOnAll = snapshot.data ?? false;
-                    return FutureBuilder(
-                        future: isSongOnAnyDirectoryButNotInAll(song.audioId),
-                        builder: (context,snapshot) {
-                          final bool isSonOnAnyButNotInAll = snapshot.data ?? false;
-                    return ListTile(
-                      leading: const Icon(Icons.cloud_queue),
-                      title: Text(Formatter.format(song.nombreAudio)),
-                      subtitle: Text(song.audioId),
-                      onTap: () async {
-                          if(_isConnected){
-                          openPlayerFromCloud(context, song);}
-                          else{
-                            showTopNotification(context, "Tienes que tener internet para navegar");
-                          }
-
-                      },
-                      trailing: isDownloading
-                          ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : IconButton(
-                        icon: Icon(
-                          isSongOnAll ? Icons.check_circle : Icons.download,
-                          color: (isSonOnAnyButNotInAll || isSongOnAll)?Colors.green : null,
-                        ),
-                        onPressed:
-                        isSongOnAll ? null :
-                            () async {
-                          final folder = await openDownloadDialog(song.audioId);
-                          if(folder!=null){
-                            _downloadSong(song, folder);
-                        }
-                          else{
-                            showTopNotification(context, "Debes seleccionar una playlist");
-                          }
-                          }
-                        ,
-                      ),
-                    );});
-                  });
+          return StreamBuilder<int>(
+            stream: database.watchDirectoryCount(),
+            builder: (context, dirSnapshot) {
+              final currentDirCount = dirSnapshot.data ?? 0;
+              return StreamBuilder<Map<String, int>>(
+                stream: database.watchAllSongCounts(),
+                builder: (context, songSnapshot) {
+                  final Map<String, int> countsMap = songSnapshot.data ?? {};
+                  Log.d("${countsMap.values}");
+                  return ListView.builder(
+                    addAutomaticKeepAlives: true,
+                    itemCount: filteredSongs.length,
+                    itemBuilder: (context, index) {
+                    Log.d(filteredSongs[index].audioId);
+                return _buildSongTile(filteredSongs[index], countsMap[filteredSongs[index].audioId] ?? 0 , currentDirCount);
+                    },
+                  );
+                },
+              );
             },
           );
-              },
+
+
+        },
+      )
+
+    );
+  }
+
+  Widget _buildSongTile(AudioDTO song, int count, int dirCount) {
+    final bool isDownloading = _downloadingIds.contains(song.audioId);
+    final bool isSongOnAll = (count == dirCount) && (dirCount > 0);
+    final bool isAnyButNotAll =( count > 0 && count < dirCount) && dirCount>0;
+
+    return PersistentSongTile(
+      key: ValueKey(song.audioId),
+      child: ListTile(
+        leading: const Icon(Icons.cloud_queue),
+        title: Text(Formatter.format(song.nombreAudio)),
+        subtitle: Text(song.audioId),
+        onTap: () => _handleOnTap(song),
+        trailing: isDownloading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : IconButton(
+          icon: Icon(
+            isSongOnAll ? Icons.check_circle : Icons.download,
+            color: (isAnyButNotAll || isSongOnAll) ? Colors.green : null,
+          ),
+          onPressed: isSongOnAll ? null : () => _handleDownload(song),
+        ),
       ),
     );
+  }
+
+  void _handleOnTap(AudioDTO song) {
+    if (_isConnected) {
+      openPlayerFromCloud(context, song);
+    } else {
+      showTopNotification(context, "Tienes que tener internet para navegar");
+    }
+  }
+
+  Future<void> _handleDownload(AudioDTO song) async {
+    final folder = await openDownloadDialog(song.audioId);
+    if (folder != null) {
+      _downloadSong(song, folder);
+      await database.addSongToDirectory(song.audioId, folder.path);
+    } else {
+      showTopNotification(context, "Debes seleccionar una playlist");
+    }
   }
 
   Future<Directory?> openDownloadDialog(String videoId) {
@@ -363,26 +377,45 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
     });
   }
   Future<void> openPlayerFromCloud(BuildContext context, AudioDTO song) async {
-    try{
-
-
-
+    try {
       showTopNotification(context, "Iniciando cancion");
-    final bytes = await _downloadApi.downloadOnApp(song.audioId);
+      final bytes = await _downloadApi.downloadOnApp(song.audioId);
       final tempDir = await getTemporaryDirectory();
 
-    final file = File('${tempDir.path}/${song.audioId}.mp3');
-    await file.writeAsBytes(bytes);
-    if (!mounted) return;
-    LocalSong localsong = LocalSong(
-        title: Formatter.format(song.nombreAudio),
-        path: file.path,
-        videoId: song.audioId
-    );
-    StreamFromPlayerNotifier.instance.notify();
-   audioHandler.loadPlaylist([localsong.toMediaItem()], false, startIndex: 0 );
-  } catch (e) {
-  Log.d("Error: $e");
+      final file = File('${tempDir.path}/${song.audioId}.mp3');
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      LocalSong localsong = LocalSong(
+          title: Formatter.format(song.nombreAudio),
+          path: file.path,
+          videoId: song.audioId
+      );
+      StreamFromPlayerNotifier.instance.notify();
+      audioHandler.loadPlaylist(
+          [localsong.toMediaItem()], false, startIndex: 0);
+    } catch (e) {
+      Log.d("Error: $e");
+    }
+  }}
+class PersistentSongTile extends StatefulWidget {
+  final Widget child;
+  const PersistentSongTile({super.key, required this.child});
+
+  @override
+  State<PersistentSongTile> createState() => _PersistentSongTileState();
+}
+
+class _PersistentSongTileState extends State<PersistentSongTile>
+    with AutomaticKeepAliveClientMixin {
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
-}
+
+

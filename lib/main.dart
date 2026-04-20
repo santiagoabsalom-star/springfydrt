@@ -1,15 +1,25 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 
 import 'package:springfydrt/features/audiohandler/audiohandler.dart';
 
 
 import 'app/app.dart';
+import 'core/log.dart';
 late final MyAudioHandler audioHandler;
 Future<void> main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
+  if(Platform.isLinux){
+    fixLinuxNumericLocale();
+    JustAudioMediaKit.ensureInitialized();
+  }
+
   audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
     config:  AudioServiceConfig(
@@ -25,4 +35,40 @@ Future<void> main() async {
 
 //Mira como cuando cambio a segundo plano me llega una notificacion:D voy a intetnar
   runApp(const MyApp());
+}
+
+typedef SetLocaleC = Pointer<Int8> Function(Int32 category, Pointer<Int8> locale);
+typedef SetLocaleDart = Pointer<Int8> Function(int category, Pointer<Int8> locale);
+
+void fixLinuxNumericLocale() {
+  if (Platform.isLinux) {
+    try {
+      final DynamicLibrary stdlib = DynamicLibrary.open('libc.so.6');
+
+      final SetLocaleDart setLocale = stdlib
+          .lookup<NativeFunction<SetLocaleC>>('setlocale')
+          .asFunction();
+
+      const int lcNumeric = 1;
+
+      final Pointer<Int8> cLocale = StringUtf8Pointer('C').toNativeUtf8().cast<Int8>();
+      setLocale(lcNumeric, cLocale);
+
+      Log.d('Linux LC_NUMERIC set to "C" successfully.');
+    } catch (e) {
+      Log.d(' Failed to set Linux locale: $e');
+    }
+  }
+}
+
+extension on String {
+  Pointer<Int8> toNativeUtf8() {
+    final units = utf8.encode(this);
+    final Pointer<Int8> result = calloc<Int8>(units.length + 1);
+    for (int i = 0; i < units.length; i++) {
+      result[i] = units[i];
+    }
+    result[units.length] = 0;
+    return result;
+  }
 }

@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:springfydrt/core/database/connection.dart';
 import '../features/home/dtos/LocalSong.dart';
 import 'log.dart';
+final database= MyDatabase.instance;
+
 Future<Directory> getAudioDirectory() async {
   final directory = await getApplicationDocumentsDirectory();
   Log.d('Audio dir: ${directory.path}');
@@ -36,12 +39,13 @@ Future<Directory> createDirectory(String folderName) async {
   } else {
     final Directory createdDir = await newDirectory.create(recursive: true);
     Log.d('Directorio creado en: ${createdDir.path}');
+    database.addDirectory(createdDir, folderName);
     return createdDir;
   }
 }
 Future<void> renameDirectory(String newName, Directory folder)async {
   final newPath = folder.path.replaceAll(folder.path.split('/').last, newName);
-
+  database.changeFolderName(folder.path, newPath);
 try {
   await folder.rename(newPath);
   Log.d('Directorio renombrado a: $newPath');
@@ -68,6 +72,14 @@ Future<List<Directory>> getDirectoriesOnFolder() async {
   } catch (_) {
     return [];
   }
+}
+
+Future<int> countSubfolders() async {
+  final dir = await getAudioDirectory();
+  if (!await dir.exists()) return 0;
+
+  final List<FileSystemEntity> entities = await dir.list().toList();
+  return entities.whereType<Directory>().length;
 }
 Future<bool> isSongOnAllDirectories(String songId)  async {
   final directories = await getDirectoriesOnFolder();
@@ -111,10 +123,10 @@ Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
     String title = fileName;
 
     if (videoId != null) {
+
       title = fileName.replaceAll('[$videoId]', '').trim();
     }
 
-    title = title.replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
     title = title.replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
 
     return LocalSong(
@@ -128,6 +140,7 @@ Future<List<LocalSong>> getSongsFromFolder(Directory folder) async {
 Future<void> moveFile(LocalSong song, Directory destinationFolder) async {
     final file = File(song.path);
     try{
+      database.moveSong(song.videoId!, song.path, destinationFolder.path);
       final fileName = file.uri.pathSegments.last;
 
       await file.rename('${destinationFolder.path}/$fileName');
@@ -143,9 +156,11 @@ Future<void> moveFile(LocalSong song, Directory destinationFolder) async {
 
 
 }
+
 Future<void> deleteFolder(Directory folder) async {
   try {
     if(folder.existsSync()){
+    database.deleteDirectory(folder.path);
       await folder.delete(recursive: true);
       Log.d("Directorio borrado con exito");
     }
@@ -177,7 +192,6 @@ Future<List<LocalSong>> getLocalSongs() async {
     }
 
     title = title.replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
-    title = title.replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
 
     return LocalSong(
       title: title,
@@ -199,7 +213,7 @@ Future<File> _getLocalFile(String audioId, Directory dir) async {
 Future<void> deleteFile(String audioId, Directory dir) async {
   try {
     final File file = await _getLocalFile(audioId, dir);
-
+    database.deleteSong(audioId);
     if (await file.exists()) {
       await file.delete();
       Log.d('borrado exitoso.');

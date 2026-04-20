@@ -5,11 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:springfydrt/custom/audio_service.dart';
 import '../../core/directories.dart';
 import '../../core/log.dart';
 import '../../main.dart';
-import '../../core/network/api_connect.dart';
 import '../cloud/api/api_cloud.dart';
 import '../notifier/notifier.dart';
 import 'api/download_api.dart';
@@ -33,6 +31,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin{
   final SearchApi _searchApi = SearchApi();
   final ApiCloud _apiCloud = ApiCloud();
   Timer? _debounce;
+  late int countOfFolders;
   final DownloadApi _downloadApi = DownloadApi();
   final TextEditingController _searchController = TextEditingController();
 
@@ -49,6 +48,7 @@ void initState() {
     super.initState();
 
   }
+
   @override
   void dispose() {
     super.dispose();
@@ -77,6 +77,7 @@ void initState() {
 
 
   Future<void> setAppAndCloudDownloaded() async {
+    countOfFolders= await database.countDirectories();
     final cloudSongs = await _apiCloud.allOnCloud();
     for(final cloud in  cloudSongs){
       _cloudDownloaded.add(cloud.audioId);
@@ -185,7 +186,7 @@ void initState() {
 
                     }
 
-                    },
+                    }, countOfFolders:countOfFolders ,
                   );
                 },
               ),
@@ -203,6 +204,7 @@ void initState() {
       directory.path,
       rootToken!,
     ));
+    await database.addSongToDirectory(info.videoId, directory.path);
     DownloadsNotifier.instance.notify();
     StreamFolderNotifier.instance.notify();
 
@@ -296,11 +298,11 @@ class _SearchResultTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onCloudDownload;
   final VoidCallback onLocalDownload;
-
+  final int countOfFolders;
   const _SearchResultTile({
     required this.video,
     required this.cloudDownloaded,
-
+    required this.countOfFolders,
     required this.onTap,
     required this.onCloudDownload,
     required this.onLocalDownload,
@@ -327,28 +329,28 @@ class _SearchResultTile extends StatelessWidget {
                   color: cloudDownloaded ? Colors.green : null),
               onPressed: cloudDownloaded ? null : onCloudDownload,
             ),
-            ListenableBuilder(
-                listenable:DownloadsNotifier.instance,
-                builder: (context,_){
-                  return
-            FutureBuilder<bool>(
-              future: isSongOnAllDirectories(video.videoId),
-              builder: (context, snapshot) {
-                final bool isDownloadedOnAll = snapshot.data ?? false;
+            StreamBuilder<int>(
+              stream: database.watchDirectoryCount(),
+              builder: (context, snapshot){
+                final count = snapshot.data ?? 0;
                 return
-                FutureBuilder<bool>(
-                  future: isSongOnAnyDirectoryButNotInAll(video.videoId),
-                  builder: (context, snapshot) {
-                    final bool isSongOnAnyDirectoryButNotInAll= snapshot.data ?? false;
+            StreamBuilder<int>(
+              stream: database.watchSongAppearances(video.videoId),
+              builder: (context, snapshot) {
+                final int appearanceCount = snapshot.data ?? 0;
 
-                    return IconButton(
-                      icon: Icon(
-                        isDownloadedOnAll ? Icons.check_circle : Icons.download,
-                        color: (isSongOnAnyDirectoryButNotInAll || isDownloadedOnAll)?Colors.green : null,
-                      ),
-                      onPressed: isDownloadedOnAll? null :onLocalDownload,
-                    );
-                  });
+
+                final bool isAll = appearanceCount == count && count > 0;
+                final bool isAny = appearanceCount > 0 && count >0;
+                final bool isAnyButNotAll = isAny && !isAll;
+
+                return IconButton(
+                  icon: Icon(
+                    isAll ? Icons.check_circle : Icons.download,
+                    color: (isAnyButNotAll || isAll) ? Colors.green : null,
+                  ),
+                  onPressed: isAll ? null : onLocalDownload,
+                );
               },
             );})
           ],
@@ -398,4 +400,8 @@ void showTopNotification(BuildContext context, String message) {
   Future.delayed(const Duration(seconds: 1), () {
     entry.remove();
   });
+
+
 }
+
+

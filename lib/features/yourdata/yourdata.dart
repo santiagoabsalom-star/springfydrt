@@ -97,7 +97,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
           double maxValorConvertido = usarMinutosEnEje ? maxSegundos / 60 : maxSegundos / 3600;
           double escalaY = esVistaSemanal && !usarMinutosEnEje ? 24 : (maxValorConvertido > 0 ? maxValorConvertido * 1.2 : 10);
 
-          return Column(
+          return SingleChildScrollView(child:Column(
             children: [
               const SizedBox(height: 20),
               Padding(
@@ -297,7 +297,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
           ],
               )))
             ],
-          );
+          ));
         },
       ),
     );

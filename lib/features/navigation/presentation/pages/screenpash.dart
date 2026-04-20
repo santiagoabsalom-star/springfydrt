@@ -45,6 +45,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (await loginFile.exists()) {
       Log.d("Archivo de login encontrado. Navegando a MainPage mientras se verifica en segundo plano.");
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

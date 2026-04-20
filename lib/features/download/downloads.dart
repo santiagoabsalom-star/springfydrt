@@ -4,8 +4,10 @@ import 'dart:ui';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/features/yourdata/api/usageApi.dart';
 
+import '../../core/database/connection.dart';
 import '../../core/directories.dart';
 import '../../core/log.dart';
 import '../home/dtos/LocalSong.dart';
@@ -29,17 +31,21 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
   bool loading = true;
   late Future<List<LocalSong>> songs;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  late bool _isConnected=false;
+  late bool _isConnected = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   late TextEditingController createDirController = TextEditingController();
-  int contadorPrimerPlano=0;
-  int contadorSegundoPlano=0;
-  bool primerPlano=true;
+  int contadorPrimerPlano = 0;
+  int contadorSegundoPlano = 0;
+  bool primerPlano = true;
+  final database = MyDatabase.instance;
+
   @override
   void initState() {
     super.initState();
     _loadSongs();
+    EmpezarContadorPrimerPlano();
+    syncLocalData();
     checkConectivity();
     _loadDirectories();
     _connectivitySubscription =
@@ -50,11 +56,260 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
         _searchQuery = _searchController.text;
       });
     });
-    createDirController= TextEditingController();
+    createDirController = TextEditingController();
     WidgetsBinding.instance.addObserver(this);
+  }
 
-    EmpezarContadorPrimerPlano();
-  }  void _updateConnectionStatus(List<ConnectivityResult> result) {
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Biblioteca'),
+        leading: selectedFolder != null
+            ? IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            setState(() {
+              selectedFolder = null;
+            });
+          },
+        )
+            : null,
+        actions: [
+
+          ? selectedFolder != null ? null :
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              final nombredir = await openCreateDirDialog();
+
+              if (nombredir == null || nombredir.isEmpty) {
+                return;
+              }
+              await createDirectory(nombredir);
+              await _refreshData();
+            },
+
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+          ),
+        ],
+        bottom: selectedFolder == null ? null :
+
+        PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+
+            child: TextField(
+
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                filled: true,
+                fillColor: Theme
+                    .of(context)
+                    .cardColor,
+                suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      body: selectedFolder == null
+          ? FutureBuilder<List<Directory>>(
+        future: getDirectoriesOnFolder(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final folders = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: folders.length,
+            itemBuilder: (context, index) {
+              final folder = folders[index];
+              final folderName = folder.path
+                  .split('/')
+                  .last;
+
+              return ListTile(
+                leading: const Icon(Icons.folder),
+                title: Text(folderName),
+                trailing:
+                PopupMenuButton(itemBuilder: (context) =>
+                [
+                  PopupMenuItem(
+                      child: TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          final newnombredir = await openRenameDirDialog();
+                          if (newnombredir == null || newnombredir.isEmpty) {
+                            return;
+                          }
+                          await renameDirectory(newnombredir, folder);
+
+                          await _refreshData();
+                        }, child: Text("Renombrar playlist"),
+                      )
+                  ),
+                  PopupMenuItem(
+                      child: TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context);
+
+                          if (await deleteDirDialog() == true) {
+                            await deleteFolder(folder);
+                            CloudNotifier.instance.notify();
+                            await _refreshData();
+                          }
+
+                          else {
+                            return;
+                          }
+                        }, child: Text("Eliminar playlist"),
+                      )
+                  ),
+
+                ],
+
+                ),
+                onTap: () {
+                  setState(() {
+                    selectedFolder = folder;
+                  });
+                },
+              );
+            },
+          );
+        },
+
+      ) : FutureBuilder<List<LocalSong>>(
+        future: loadSongsFromFolderOrdered(selectedFolder!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+                child: Text('No hay canciones descargadas en esta playlist'));
+          }
+
+          final list = snapshot.data!.where((song) {
+            return song.title.toLowerCase().contains(
+                _searchQuery.toLowerCase());
+          }).toList();
+
+          if (list.isEmpty) {
+            return const Center(child: Text('No se encontraron canciones'));
+          }
+
+
+          return ReorderableListView.builder(
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              final song = list[index];
+              Log.d("${song.videoId}");
+              return ListTile(
+                key: ValueKey(song.path),
+                leading: const Icon(Icons.music_note),
+                title: Text(Formatter.format(song.title)),
+                trailing: PopupMenuButton(itemBuilder: (context) =>
+                [
+                  PopupMenuItem(
+                    onTap: () async {
+                      await Future.delayed(const Duration(milliseconds: 0));
+
+                      final Directory? folder = await moveDialog();
+                      if (folder == null) return;
+
+                      await moveFile(song, folder);
+                      await _refreshData();
+                    },
+                    child: const Text("Mover a"),
+                  ),
+
+                  PopupMenuItem(
+                    onTap: () async {
+                      await Future.delayed(const Duration(milliseconds: 0));
+
+                      final ok = await deleteSongDialog();
+                      if (ok != true) return;
+                      Log.d("${song.videoId}");
+                      await deleteFile(song.videoId!, selectedFolder!);
+
+                      CloudNotifier.instance.notify();
+                      await _refreshData();
+                    },
+                    child: const Text("Eliminar canción"),
+                  )
+
+                  ,
+                ],
+
+                ),
+
+                onTap: () {
+                  StreamFromPlayerNotifier.instance.notify();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          PlayerPage(
+
+                            playlist: list,
+                            isOpenFromCloud: false,
+                            initialIndex: index,
+                          ),
+                    ),
+                  );
+                },
+
+              );
+            }, onReorder: (oldIndex, newIndex) async {
+            setState(() {
+              if (newIndex > oldIndex) newIndex--;
+              final item = list.removeAt(oldIndex);
+              list.insert(newIndex, item);
+            });
+
+            if (selectedFolder != null) {
+              final copy = List<LocalSong>.from(list);
+              await saveOrder(selectedFolder!, copy);
+            }
+          },
+
+
+          );
+        },
+      ),
+    );
+  }
+
+
+
+    void _updateConnectionStatus(List<ConnectivityResult> result) {
     setState(() {
 
       _isConnected = !result.contains(ConnectivityResult.none);
@@ -84,7 +339,6 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
     });
   }
 
-
   @override
   Future<AppExitResponse> didRequestAppExit() async {
 
@@ -113,12 +367,14 @@ EmpezarContadorPrimerPlanoLocal();
     }
     if (state == AppLifecycleState.paused) {
       primerPlano=false;
+      Log.d("Aplicacion en segundo plano");
       if(_isConnected) {
 
         TerminarContadorPrimerPlano();
         EmpezarContadorSegundoPlano();
       }
       else{
+        Log.d("Empezando contador SegundoPlanoLocal");
         TerminarContadorPrimerPlanoLocal();
         EmpezarContadorSegundoPlanoLocal();
 
@@ -129,10 +385,10 @@ EmpezarContadorPrimerPlanoLocal();
       //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
     }
   }
-
  void EmpezarContadorSegundoPlanoLocal(){
     contadorSegundoPlano= DateTime.now().millisecondsSinceEpoch;
  }
+
  void EmpezarContadorPrimerPlanoLocal(){
     contadorPrimerPlano= DateTime.now().millisecondsSinceEpoch;
  }
@@ -151,7 +407,6 @@ EmpezarContadorPrimerPlanoLocal();
     Log.d("segundos: $segundosTranscurridos");
     UsageLocalStorage.saveUsageLocal(segundosTranscurridos, true);
   }
-
   void TerminarContadorSegundoPlanoLocal() {
     if (contadorSegundoPlano == 0) return;
 
@@ -178,7 +433,27 @@ void _loadDirectories() {
       getDirectoriesOnFolder().then((value) => folders = value);
     });
   }
+Future<void> syncLocalData() async {
+    List<Directory> folders= await getDirectoriesOnFolder();
+    List<LocalSong> songs=[];
+    Log.d("${folders.length}");
+    if(folders.isNotEmpty){
+      Log.d("${folders.length}");
+      for( var dir in folders){
+        List<LocalSong> localsongs= await getSongsFromFolder(dir);
+        songs.addAll(localsongs);
+
+      if(songs.isNotEmpty){
+      database.syncAndClean(folders, songs);
+      }
+          else{
+              return;
+      }}
+    }return;
+
+}
   Future<void> _loadSongs() async {
+
     if (selectedFolder == null) {
       setState(() {
         songsInFolder = [];
@@ -201,248 +476,6 @@ void _loadDirectories() {
     _loadDirectories();
     _loadSongs();
 }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Biblioteca'),
-        leading: selectedFolder != null
-            ? IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-
-            setState(() {
-
-              selectedFolder = null;
-            });
-          },
-        )
-            : null,
-        actions: [
-
-           ? selectedFolder != null ? null :
-          IconButton(
-            icon: const Icon(Icons.add),
-                onPressed:() async {
-              final nombredir = await openCreateDirDialog();
-
-              if(nombredir== null || nombredir.isEmpty){ return;
-              }
-              await createDirectory(nombredir);
-              await _refreshData();
-              },
-          )  ,
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
-          ),
-        ],
-        bottom: selectedFolder==null ? null:
-
-        PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-
-            child: TextField(
-
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
-                          onPressed: () {
-                            _searchController.clear();
-
-                          },
-                        )]),
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      body: selectedFolder == null
-    ? FutureBuilder<List<Directory>>(
-        future: getDirectoriesOnFolder(),
-    builder: (context, snapshot) {
-    if (!snapshot.hasData) {
-    return const Center(child: CircularProgressIndicator());
-    }
-
-    final folders = snapshot.data!;
-
-    return ListView.builder(
-    itemCount: folders.length,
-    itemBuilder: (context, index) {
-    final folder = folders[index];
-    final folderName = folder.path.split('/').last;
-
-    return ListTile(
-    leading: const Icon(Icons.folder),
-    title: Text(folderName),
-      trailing:
-      PopupMenuButton(itemBuilder: (context) =>
-      [
-        PopupMenuItem(
-            child: TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final newnombredir = await openRenameDirDialog();
-                if(newnombredir== null || newnombredir.isEmpty){
-                  return;
-                }
-                await renameDirectory(newnombredir, folder);
-                await _refreshData();
-              }, child:Text("Renombrar playlist"),
-            )
-        ),
-        PopupMenuItem(
-            child: TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-
-                if(await deleteDirDialog()==true){
-
-                  await deleteFolder(folder);
-                  CloudNotifier.instance.notify();
-                  await _refreshData();
-
-                }
-
-                else{
-                  return;
-                }
-              }, child:Text("Eliminar playlist"),
-            )
-        ),
-
-      ],
-
-      ),
-    onTap: () {
-    setState(() {
-    selectedFolder = folder;
-    });
-                            },
-                         );
-                     },
-               );
-            },
-
-      ) :FutureBuilder<List<LocalSong>>(
-        future: loadSongsFromFolderOrdered(selectedFolder!),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No hay canciones descargadas en esta playlist'));
-          }
-
-          final list = snapshot.data!.where((song) {
-            return song.title.toLowerCase().contains(_searchQuery.toLowerCase());
-          }).toList();
-
-          if (list.isEmpty) {
-            return const Center(child: Text('No se encontraron canciones'));
-          }
-
-
-
-          return ReorderableListView.builder(
-            itemCount: list.length,
-            itemBuilder: (context, index) {
-              final song = list[index];
-
-              return ListTile(
-                key: ValueKey(song.path),
-                leading: const Icon(Icons.music_note),
-                title: Text(song.title),
-                trailing:       PopupMenuButton(itemBuilder: (context) =>
-                [
-                    PopupMenuItem(
-                    onTap: () async {
-              await Future.delayed(const Duration(milliseconds: 0));
-
-              final Directory? folder = await moveDialog();
-              if (folder == null) return;
-
-              await moveFile(song, folder);
-              await _refreshData();
-              },
-                child: const Text("Mover a"),
-              ),
-
-                  PopupMenuItem(
-                    onTap: () async {
-                      await Future.delayed(const Duration(milliseconds: 0));
-
-                      final ok = await deleteSongDialog();
-                      if (ok != true) return;
-
-                      await deleteFile(song.videoId!, selectedFolder!);
-                      CloudNotifier.instance.notify();
-                      await _refreshData();
-                    },
-                    child: const Text("Eliminar canción"),
-                  )
-
-                  ,
-                ],
-
-                ),
-
-                onTap: () {
-                  StreamFromPlayerNotifier.instance.notify();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlayerPage(
-
-                        playlist: list,
-                        isOpenFromCloud: false,
-                        initialIndex: index,
-                      ),
-                    ),
-                  );
-                },
-
-              );
-
-            }, onReorder: (oldIndex, newIndex) async {
-            setState(() {
-              if (newIndex > oldIndex) newIndex--;
-              final item = list.removeAt(oldIndex);
-              list.insert(newIndex, item);
-            });
-
-            if (selectedFolder != null) {
-              final copy = List<LocalSong>.from(list);
-              await saveOrder(selectedFolder!, copy);
-            }
-          },
-
-
-          );
-        },
-      ),
-    );
-
-  }
   Future<String?> openCreateDirDialog() => showDialog(context: context, builder: (context)=> AlertDialog(
     title: Text("Crear una playlist"),
     content: TextField(

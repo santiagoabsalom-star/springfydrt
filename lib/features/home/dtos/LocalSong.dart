@@ -27,7 +27,16 @@ class LocalSong {
       artist: "Nigga",
       extras: {'videoId': videoId},
 
-      artUri: Uri.parse('https://img.youtube.com/vi/$videoId/0.jpg'),
+      artUri: getValidArtUri(videoId!),
     );
   }
+  Uri getValidArtUri(String audioId) {
+    try {
+      return Uri.parse('https://youtube.com');
+    } catch (_) {
+      // Fallback to a local asset or a placeholder if the URL is malformed
+      return Uri.parse('asset:///assets/images/default_cover.png');
+    }
+  }
+
 }
