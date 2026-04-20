@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/yourdata/api/usageApi.dart';
 
-import '../../core/log.dart';
 
 enum TipoVisualizacion { semanalPrimer, semanalSegundo, diarioPrimer, diarioSegundo }
 
@@ -95,7 +94,17 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
           datosProcesados.updateAll((key, value) => usarMinutosEnEje ? value / 60 : value / 3600);
 
           double maxValorConvertido = usarMinutosEnEje ? maxSegundos / 60 : maxSegundos / 3600;
-          double escalaY = esVistaSemanal && !usarMinutosEnEje ? 24 : (maxValorConvertido > 0 ? maxValorConvertido * 1.2 : 10);
+          
+          double escalaY;
+          if (usarMinutosEnEje) {
+            escalaY = (maxValorConvertido > 0 ? maxValorConvertido * 1.2 : 1);
+          } else {
+            if (esVistaSemanal) {
+              escalaY = 24;
+            } else {
+              escalaY = (maxValorConvertido > 0 ? maxValorConvertido * 1.2 : 1);
+            }
+          }
 
           return SingleChildScrollView(child:Column(
             children: [
@@ -136,14 +145,20 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                           tooltipBorderRadius: BorderRadius.circular(4),
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             final double val = rod.toY;
-                            String texto = val < 1 ? "${(val * 60).toStringAsFixed(1)} min" : "${val.toStringAsFixed(1)} h";
+                            String texto = usarMinutosEnEje 
+                                ? "${val.toStringAsFixed(1)} min" 
+                                : (val < 1 ? "${(val * 60).toStringAsFixed(1)} min" : "${val.toStringAsFixed(1)} h");
                             return BarTooltipItem(texto, const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
                           },
                         ),
                       ),
                       maxY: escalaY,
                       alignment: BarChartAlignment.spaceAround,
-                      gridData: const FlGridData(show: false),
+                      gridData: FlGridData(
+                        show: true, 
+                        drawVerticalLine: false,
+                        horizontalInterval: usarMinutosEnEje ? 10 : 4,
+                      ),
                       borderData: FlBorderData(show: false),
                       titlesData: FlTitlesData(
                         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -153,6 +168,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                             showTitles: true,
                             reservedSize: 40,
                             getTitlesWidget: (value, meta) {
+                              if (value == 0) return const SizedBox.shrink();
                               String unit = usarMinutosEnEje ? 'm' : 'h';
                               return Text('${value.toInt()}$unit',
                                   style: const TextStyle(fontSize: 11, color: Colors.grey));
@@ -173,9 +189,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                         ),
                       ),
                       barGroups: List.generate(7, (index) {
-
                         final double valorY = datosProcesados[index + 1] ?? 0;
-
                         return BarChartGroupData(
                           x: index,
                           barRods: [
@@ -187,7 +201,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                               backDrawRodData: BackgroundBarChartRodData(
                                 show: true,
                                 toY: escalaY,
-                                color:  Color.fromRGBO(255, 255, 255, 0.2),
+                                color: const Color.fromRGBO(255, 255, 255, 0.1),
                               ),
                             )
                           ],
@@ -212,7 +226,11 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                         ),
                       ),
                       maxY: escalaY,
-                      gridData: const FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 1),
+                      gridData: FlGridData(
+                        show: true, 
+                        drawVerticalLine: false, 
+                        horizontalInterval: usarMinutosEnEje ? 10 : (escalaY / 5),
+                      ),
                       borderData: FlBorderData(show: false),
                       titlesData: FlTitlesData(
                         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -222,6 +240,7 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
                             showTitles: true,
                             reservedSize: 40,
                             getTitlesWidget: (value, meta) {
+                              if (value == 0) return const SizedBox.shrink();
                               String unit = usarMinutosEnEje ? 'm' : 'h';
                               return Text('${value.toInt()}$unit',
                                   style: const TextStyle(fontSize: 11, color: Colors.grey));
@@ -263,47 +282,52 @@ class _YourDataPageState extends State<YourDataPage> with AutomaticKeepAliveClie
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0,vertical: 10.0),
                 child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-          color: Colors.blueAccent.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-          ),
-          child: Row(
-          children: [
-          const Icon(Icons.access_time_filled, color: Colors.blueAccent, size: 30),
-          const SizedBox(width: 15),
-          Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          Text(
-          esVistaSemanal ? "Uso Total de la Semana" : "Uso Total del Día",
-          style: const TextStyle(
-          fontSize: 14,
-          color: Colors.black54,
-          fontWeight: FontWeight.w500,
-          ),
-          ),
-          Text(usarMinutosEnEje ?_formatearTiempoTotal(datosProcesados.values.reduce((a, b) => a + b) / 60) :
-          _formatearTiempoTotal(datosProcesados.values.reduce((a, b) => a + b)),
-          style: const TextStyle(
-          fontSize: 22,
-          color: Colors.blueAccent,
-          fontWeight: FontWeight.bold,
-          ),
-          ),
-          ],
-          ),
-          ],
-              )))
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time_filled, color: Colors.blueAccent, size: 30),
+                      const SizedBox(width: 15),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            esVistaSemanal ? "Uso Total de la Semana" : "Uso Total del Día",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            usarMinutosEnEje 
+                              ? _formatearTiempoTotal(datosProcesados.values.reduce((a, b) => a + b) / 60) 
+                              : _formatearTiempoTotal(datosProcesados.values.reduce((a, b) => a + b)),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              color: Colors.blueAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              )
             ],
           ));
         },
       ),
     );
-  }}
+  }
+}
+
 String _formatearTiempoTotal(double horasTotales) {
-  Log.d("$horasTotales");
   if (horasTotales <= 0) return "Sin actividad :(";
 
   int horas = horasTotales.toInt();
