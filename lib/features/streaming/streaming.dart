@@ -26,51 +26,66 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 enum DuoState { none, connecting, hosting, following }
+
+bool isAndroid=Platform.isAndroid;
+void mpProccesorIsolate(SendPort toMainPort){
+  final fromMainPort = ReceivePort();
+  toMainPort.send(fromMainPort.sendPort);
+
+  fromMainPort.listen((message) {
+    if (message is! Uint8List) return;
+
+    try {
+        final Int16List int16Samples = Int16List.view(message.buffer);
+        final float32Data = _convertInt16ToFloat32(int16Samples);
+        toMainPort.send(float32Data);
+    } catch (e) {
+      Log.d("Error procesando PCM: $e");
+    }
+  });
+
+}
 void pcmProcessorIsolate(SendPort toMainPort) {
   final fromMainPort = ReceivePort();
   toMainPort.send(fromMainPort.sendPort);
 
   fromMainPort.listen((message) {
-    if (message is List<int>) {
+    if (message is! Uint8List) return;
 
-      try{
-        final Uint8List uint8list = message is Uint8List
-            ? message
-            : Uint8List.fromList(message);
-        if(Platform.isAndroid){
-        if (uint8list.isEmpty) return;
-
-        final int validLength = uint8list.length & ~1;
-
-        if (validLength <= 0) return;
-
-        final bd = ByteData.view(
-            uint8list.buffer,
-            uint8list.offsetInBytes,
-            validLength
-        );
-
-        toMainPort.send(PcmArrayInt16(bytes: bd));}
-        else{
-          toMainPort.send(pcm16ToFloat32(uint8list));
-        }
+    try {
+      final int len = message.length;
+      if (len < 2) return;
 
 
-      } catch (e) {
-    Log.d("Error al procesar datos PCM: $e");
-          }
+      final int validLength = len & ~1;
+
+      if (validLength <= 0) return;
+
+      final bd = ByteData.view(
+          message.buffer,
+          message.offsetInBytes,
+          validLength
+      );
+
+
+        toMainPort.send(PcmArrayInt16(bytes: bd));
+
+    } catch (e) {
+      Log.d("Error procesando PCM: $e");
     }
   });
 }
-Float32List pcm16ToFloat32(Uint8List bytes) {
-  final int16 = Int16List.view(bytes.buffer);
-  final float32 = Float32List(int16.length);
+final double scale = 1.0 / 32768.0;
+Float32List _convertInt16ToFloat32(Int16List source) {
+  final int len = source.length;
+  final result = Float32List(len);
 
-  for (int i = 0; i < int16.length; i++) {
-    float32[i] = int16[i] / 32768.0;
+
+
+  for (int i = 0; i < len; i++) {
+    result[i] = source[i] * scale;
   }
-
-  return float32;
+  return result;
 }
 class StreamingPage extends StatefulWidget {
 
@@ -124,20 +139,35 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   String emojiActual="";
   Future<void> initIsolate() async {
     _fromIsolatePort = ReceivePort();
-    _pcmIsolate = await Isolate.spawn(pcmProcessorIsolate, _fromIsolatePort!.sendPort);
-
+    if(isAndroid) {
+      _pcmIsolate = await Isolate.spawn(pcmProcessorIsolate, _fromIsolatePort!.sendPort);
+    }
+    else{
+      _pcmIsolate= await Isolate.spawn(mpProccesorIsolate, _fromIsolatePort!.sendPort);
+    }
+    if(isAndroid){
     _fromIsolatePort!.listen((message) {
       if (message is SendPort) {
         _toIsolatePort = message;
-      } else if (message is PcmArrayInt16 && Platform.isAndroid) {
-
+        return;
+      }
         audioHandler.playpcm(message);
-      }
-      else if(message is Float32List){
-        audioHandler.playmp(message);
-      }
-
     });
+  }
+    else{
+      _fromIsolatePort!.listen((message) {
+
+        if (message is SendPort) {
+          _toIsolatePort = message;
+          return;
+        }
+
+        audioHandler.playmp(message);
+
+
+
+      });
+    }
   }
 
   void _onDataReceived(List<int> bytes) {
@@ -324,7 +354,7 @@ class _StreamingPageState extends State<StreamingPage> with WidgetsBindingObserv
   @override
   void dispose() {
     _pcmIsolate?.kill();
-    WakelockPlus.disable();
+    if(Platform.isAndroid){WakelockPlus.disable();}
     _progressTimer?.cancel();
     _audioHandlerSubscription?.cancel();
     if(_duoState == DuoState.hosting){
@@ -419,7 +449,7 @@ Future<void> obtenerDuo() async {
       _isPlaying=false;
     });
     _isStateRepeating=false;
-    WakelockPlus.disable();
+    if(Platform.isAndroid){WakelockPlus.disable();}
     _emitRepeatingState(_isStateRepeating);
     disconnectedFromSession=true;
     if(_duoState == DuoState.hosting){
@@ -465,7 +495,7 @@ Future<void> obtenerDuo() async {
       setState(() {
         _isPlaying=false;
       });
-      WakelockPlus.disable();
+      if(Platform.isAndroid){WakelockPlus.disable();}
       _isStateRepeating=false;
       _emitRepeatingState(_isStateRepeating);
       _resetSlider();
@@ -657,97 +687,181 @@ Future<void> obtenerDuo() async {
         if (await hasConnection()) {
           //_messagesChannel = await messageConnect(userHeader);
           _pcmchannel = await pcmConnect(userHeader);
-         WakelockPlus.enable();
+         if(Platform.isAndroid){WakelockPlus.enable();}
         } else {
           Log.d("No hay conexión a internet");
         }
       }
 
       isDuoConnected();
-      _pcmchannel!.stream.listen((message) async {
-        if (message is String) {
-          final comando = ComandoDTO.fromJson(jsonDecode(message));
-          Log.d(message.toString());
-          Log.d(comando.comando);
-          await _handleCommand(comando);
-          return;
-        }
-
-        if (message is List<int>) {
-          if (_duoState != DuoState.hosting &&
-              !(_duoState == DuoState.following && _isFollowerConnected)) {
+      if(isAndroid){
+        _pcmchannel!.stream.listen((message) async {
+          if (message is String) {
+            final comando = ComandoDTO.fromJson(jsonDecode(message));
+            Log.d(message.toString());
+            Log.d(comando.comando);
+            await _handleCommand(comando);
             return;
           }
 
-           Uint8List bytes= Uint8List.fromList(message);
-
-
-          if (!_wavHeaderSkipped) {
-            if (bytes.length <= _wavHeaderBytesPending) {
-              _wavHeaderBytesPending -= bytes.length;
+          if (message is List<int>) {
+            if (_duoState != DuoState.hosting &&
+                !(_duoState == DuoState.following && _isFollowerConnected)) {
               return;
+            }
+
+            Uint8List bytes= Uint8List.fromList(message);
+
+            if (!_wavHeaderSkipped) {
+              if (bytes.length <= _wavHeaderBytesPending) {
+                _wavHeaderBytesPending -= bytes.length;
+                return;
+              } else {
+                bytes = bytes.sublist(_wavHeaderBytesPending);
+                _wavHeaderBytesPending = 0;
+                _wavHeaderSkipped = true;
+              }
+            }
+
+            if (bytes.isEmpty) return;
+
+            if (bytes.lengthInBytes & ~1 != 0) {
+              bytes = bytes.sublist(0, bytes.lengthInBytes - 1);
+            }
+
+
+
+
+
+
+
+            _onDataReceived(bytes);
+          }
+        }, onDone: () async {
+          Log.d("WebSocket connection closed.");
+          if (!mounted) return;
+          if(disconnectedFromSession){
+            disconnectedFromSession=false;
+            return;
+
+          }
+          await audioHandler.stoppcm();
+          setState(() {
+            _isPlaying= false;
+            _currentSongIndex = null;
+            _currentSliderValue=0.0;
+            _currentSongDuration=0;
+            _currentSong = null;
+            _hostUser = null;
+            _isFollowerConnected = false;
+          });
+          _emitState(DuoState.none);
+          showTopNotification(context, "Sesión terminada");
+
+          if (mounted) {
+            if (await hasConnection()) {
+              _pcmchannel = await pcmConnect(userHeader);
+              Log.d("WebSocket connected.");
             } else {
-              bytes = bytes.sublist(_wavHeaderBytesPending);
-              _wavHeaderBytesPending = 0;
-              _wavHeaderSkipped = true;
+              Log.d("No hay conexión a internet");
             }
           }
-
-          if (bytes.isEmpty) return;
-
-        if (bytes.lengthInBytes & ~1 != 0) {
-            bytes = bytes.sublist(0, bytes.lengthInBytes - 1);
-          }
-
-          if (bytes.isEmpty) return;
-
-          _onDataReceived(bytes);
-        }
-      }, onDone: () async {
-        Log.d("WebSocket connection closed.");
-        if (!mounted) return;
-        if(disconnectedFromSession){
-          disconnectedFromSession=false;
-          return;
-
-        }
-        await audioHandler.stoppcm();
-        setState(() {
-          _isPlaying= false;
-          _currentSongIndex = null;
-          _currentSliderValue=0.0;
-          _currentSongDuration=0;
-          _currentSong = null;
-          _hostUser = null;
-          _isFollowerConnected = false;
-        });
-        _emitState(DuoState.none);
-        showTopNotification(context, "Sesión terminada");
-
-        if (mounted) {
-          if (await hasConnection()) {
-            _pcmchannel = await pcmConnect(userHeader);
-            Log.d("WebSocket connected.");
-          } else {
-            Log.d("No hay conexión a internet");
-          }
-        }
         }, onError: (error) async {
-        Log.d("WebSocket error: $error");
-        if (!mounted) return;
+          Log.d("WebSocket error: $error");
+          if (!mounted) return;
 
-        await audioHandler.stoppcm();
-        setState(() {
-          _currentSong = null;
-          _hostUser = null;
-          _isFollowerConnected = false;
+          await audioHandler.stoppcm();
+          setState(() {
+            _currentSong = null;
+            _hostUser = null;
+            _isFollowerConnected = false;
+          });
+          _emitState(DuoState.none);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error de conexión: $error')),
+          );
         });
-        _emitState(DuoState.none);
+      }
+      else{
+        _pcmchannel!.stream.listen((message) async {
+          if (message is String) {
+            final comando = ComandoDTO.fromJson(jsonDecode(message));
+            Log.d(message.toString());
+            Log.d(comando.comando);
+            await _handleCommand(comando);
+            return;
+          }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión: $error')),
-        );
-      });
+          if (message is List<int>) {
+            if (_duoState != DuoState.hosting &&
+                !(_duoState == DuoState.following && _isFollowerConnected)) {
+              return;
+            }
+
+            Uint8List bytes= Uint8List.fromList(message);
+
+
+
+            if (bytes.isEmpty) return;
+
+
+
+
+
+
+
+
+
+            _onDataReceived(bytes);
+          }
+        }, onDone: () async {
+          Log.d("WebSocket connection closed.");
+          if (!mounted) return;
+          if(disconnectedFromSession){
+            disconnectedFromSession=false;
+            return;
+
+          }
+          await audioHandler.stoppcm();
+          setState(() {
+            _isPlaying= false;
+            _currentSongIndex = null;
+            _currentSliderValue=0.0;
+            _currentSongDuration=0;
+            _currentSong = null;
+            _hostUser = null;
+            _isFollowerConnected = false;
+          });
+          _emitState(DuoState.none);
+          showTopNotification(context, "Sesión terminada");
+
+          if (mounted) {
+            if (await hasConnection()) {
+              _pcmchannel = await pcmConnect(userHeader);
+              Log.d("WebSocket connected.");
+            } else {
+              Log.d("No hay conexión a internet");
+            }
+          }
+        }, onError: (error) async {
+          Log.d("WebSocket error: $error");
+          if (!mounted) return;
+
+          await audioHandler.stoppcm();
+          setState(() {
+            _currentSong = null;
+            _hostUser = null;
+            _isFollowerConnected = false;
+          });
+          _emitState(DuoState.none);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error de conexión: $error')),
+          );
+        });
+      }
+
     } catch (e) {
       Log.d("Failed to connect: $e");
       if (!mounted) return;
@@ -1145,7 +1259,7 @@ setState(() {
     setState(() {
       _isPlaying=false;
     });
-    WakelockPlus.disable();
+    if(Platform.isAndroid){WakelockPlus.disable();}
     _isStateRepeating=false;
     _emitRepeatingState(_isStateRepeating);
     if(_duoState == DuoState.hosting){

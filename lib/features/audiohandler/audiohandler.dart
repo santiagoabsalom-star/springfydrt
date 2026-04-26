@@ -355,6 +355,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   }
   Future<void> playpcm(PcmArrayInt16 buffer) async {
+
     await _pcmPlayer.play(buffer);
   }
 

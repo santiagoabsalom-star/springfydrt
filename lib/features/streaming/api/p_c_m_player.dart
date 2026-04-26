@@ -36,11 +36,12 @@ Future<void>initialize(){
   }
 
   Future<void> play(PcmArrayInt16 buffer) async {
-    if (isPaused || !_ready) return;
+
+  if (isPaused || !_ready) {return;}
 
 
 
-    FlutterPcmSound.feed(buffer);
+    else{  FlutterPcmSound.feed(buffer);}
 
 }
 

@@ -13,6 +13,7 @@ import 'package:springfydrt/features/audiohandler/audiohandler.dart';
 import 'app/app.dart';
 import 'core/log.dart';
 late final MyAudioHandler audioHandler;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if(Platform.isLinux){
@@ -32,7 +33,8 @@ Future<void> main() async {
       notificationColor: Colors.green
     ),
   );
-
+//await initialize();
+//await showNotification("Hola", "No entendiste nada de lo que hice", "PAYLOAD TEST");
 //Mira como cuando cambio a segundo plano me llega una notificacion:D voy a intetnar
   runApp(const MyApp());
 }
@@ -72,3 +74,31 @@ extension on String {
     return result;
   }
 }
+//Ejemplo de notificacion para linux
+/*
+NotificationDetails notificationDetails =  NotificationDetails(
+    linux: LinuxNotificationDetails(
+      icon: AssetsLinuxIcon(
+        'assets/icon.png',
+        ),
+        actions: <LinuxNotificationAction>[
+          LinuxNotificationAction(key: 'ACTION_1', label:"HOla" ),
+          LinuxNotificationAction(key: 'ACTION_2', label:"HOLA" )
+        ]
+    )
+);
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+Future<void> initialize() async {
+const LinuxInitializationSettings initializationSettingsLinux = LinuxInitializationSettings(defaultActionName: 'Open');
+const InitializationSettings initializationSettings =
+InitializationSettings(linux: initializationSettingsLinux);
+await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
+
+}
+
+ Future<void> showNotification(String title, String body, String payload)async {
+
+  flutterLocalNotificationsPlugin.show(id: 1,title: title,body: body, notificationDetails: notificationDetails, payload: payload);
+
+}*/

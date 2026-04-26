@@ -4,8 +4,11 @@ import 'dart:ui';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/features/yourdata/api/usageApi.dart';
+import 'package:springfydrt/main.dart';
 
 import '../../core/database/connection.dart';
 import '../../core/directories.dart';
@@ -38,13 +41,17 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
   int contadorPrimerPlano = 0;
   int contadorSegundoPlano = 0;
   bool primerPlano = true;
+  final _primerPlanoSubject = BehaviorSubject<bool>.seeded(true);
+  Stream<bool> get primerPlanoStream => _primerPlanoSubject.stream;
   final database = MyDatabase.instance;
-
+  final _connectivitySubject = BehaviorSubject<bool>.seeded(false);
+  Stream<bool> get connectivityStream => _connectivitySubject.stream;
   @override
   void initState() {
     super.initState();
     _loadSongs();
     EmpezarContadorPrimerPlano();
+    empezarContadoresLocales();
     syncLocalData();
     checkConectivity();
     _loadDirectories();
@@ -310,19 +317,18 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
 
 
     void _updateConnectionStatus(List<ConnectivityResult> result) {
+      Log.d("---------------------");
+    Log.d("$result");
+      Log.d("---------------------");
+        bool isConnect= true;
+        if(result.contains(ConnectivityResult.other) || result.contains(ConnectivityResult.none)) isConnect=false;
+      _connectivitySubject.add(isConnect);
+
     setState(() {
 
       _isConnected = !result.contains(ConnectivityResult.none);
-      if(!_isConnected){
-        if(primerPlano){
-          TerminarContadorSegundoPlanoLocal();
-          EmpezarContadorPrimerPlanoLocal();
-        }
-        else{
-          TerminarContadorPrimerPlanoLocal();
-          EmpezarContadorSegundoPlanoLocal();
-        }
-      }
+
+
       if(_isConnected){
         Future.microtask(() {
           Future.delayed(const Duration(seconds: 1), () async {
@@ -351,46 +357,72 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
   void didChangeAppLifecycleState(AppLifecycleState state) {
 
 
-
     if(state==AppLifecycleState.resumed){
-      primerPlano=true;
-    Log.d("Aplicacion en primer plano");
-    if(_isConnected){
-TerminarContadorSegundoPlano();
-EmpezarContadorPrimerPlano();}
-else{
-Log.d("Empezando contador primerPlanoLocal");
-TerminarContadorSegundoPlanoLocal();
-EmpezarContadorPrimerPlanoLocal();
-    }
-      //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
-    }
-    if (state == AppLifecycleState.paused) {
-      primerPlano=false;
-      Log.d("Aplicacion en segundo plano");
-      if(_isConnected) {
+      Log.d("Emitiendo primer plano...");
+      _primerPlanoSubject.add(true);
 
-        TerminarContadorPrimerPlano();
-        EmpezarContadorSegundoPlano();
-      }
-      else{
-        Log.d("Empezando contador SegundoPlanoLocal");
-        TerminarContadorPrimerPlanoLocal();
-        EmpezarContadorSegundoPlanoLocal();
 
+    }
+
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      Log.d("Emitiendo segundo plano...");
+
+      _primerPlanoSubject.add(false);
       }
 
 
 
       //Si tengo internet le mando senial al servidor para que empiece contador. sino guardamos en un archivo
-    }
+
   }
- void EmpezarContadorSegundoPlanoLocal(){
-    contadorSegundoPlano= DateTime.now().millisecondsSinceEpoch;
+ void empezarContadoresLocales(){
+    Log.d("Escuchando cambios...");
+    Rx.combineLatest3(audioHandler.player.playerStateStream,primerPlanoStream,connectivityStream, (state, isPrimerPlano, isConnected)=> [state,isPrimerPlano,isConnected]).listen((event) {
+
+      final state = event[0] as PlayerState;
+      final isPrimerPlano =   event[1] as bool;
+      final isConnected = event[2] as bool;
+      if(isConnected){
+
+        if(!isPrimerPlano){
+          TerminarContadorPrimerPlano();
+          if(state.playing && state.processingState == ProcessingState.ready){
+              Log.d("Empieza contador segundo plano online");
+              EmpezarContadorSegundoPlano();
+          }
+        }
+        else{
+          Log.d("Empieza contador primer plano online");
+          TerminarContadorSegundoPlano();
+          EmpezarContadorPrimerPlano();
+        }
+
+      } else
+      { if (!isPrimerPlano) {
+        TerminarContadorPrimerPlanoLocal();
+        if(state.playing && state.processingState == ProcessingState.ready){
+          Log.d("Empieza contador segundo plano local");
+
+
+
+          contadorSegundoPlano = DateTime
+              .now()
+              .millisecondsSinceEpoch;}
+
+      }
+      else if(isPrimerPlano){
+        Log.d("Empieza contador primer plano local");
+
+        TerminarContadorSegundoPlanoLocal();
+        EmpezarContadorPrimerPlanoLocal();
+      }}
+
+    });
+
  }
 
  void EmpezarContadorPrimerPlanoLocal(){
-    contadorPrimerPlano= DateTime.now().millisecondsSinceEpoch;
+    contadorPrimerPlano=DateTime.now().millisecondsSinceEpoch;
  }
 
   void TerminarContadorPrimerPlanoLocal() {
@@ -408,6 +440,7 @@ EmpezarContadorPrimerPlanoLocal();
     UsageLocalStorage.saveUsageLocal(segundosTranscurridos, true);
   }
   void TerminarContadorSegundoPlanoLocal() {
+    Log.d("Terminando Contador SegundoPlano");
     if (contadorSegundoPlano == 0) return;
 
     final ahora = DateTime.now().millisecondsSinceEpoch;
