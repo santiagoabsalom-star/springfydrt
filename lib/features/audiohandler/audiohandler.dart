@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
@@ -8,20 +9,28 @@ import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
 import 'package:springfydrt/features/streaming/api/p_c_m_player.dart';
-
 import '../../core/log.dart';
 import '../cloud/dto/audioDto.dart';
 
+class Song{
+  late MediaItem item;
+  late bool hasBeenLoaded;
+  Song(this.item, this.hasBeenLoaded);
+}
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final player = AudioPlayer();
   final audioStream= getAudioStream();
-
+  bool randomSong=false;
+  int? previousIndex = -1;
   final PcmPlayer _pcmPlayer = PcmPlayer();
   bool isFromDuo = false;
   final _pcmPlayingSubject = BehaviorSubject<bool>.seeded(false);
   Stream<bool> get pcmPlayingStream => _pcmPlayingSubject.stream;
   bool isHost= false;
-
+  bool isSkippingFromButton=true;
+  List<Song> songs=[];
+  List<MediaItem> customQueue = [];
+  List<MediaItem> customItem=[];
   Future<void> reset() async {
     if(isFromDuo){
       mediaItem.add(null);
@@ -36,11 +45,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         queueIndex: null,
       ));
     }
-  
+
   }
+
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+
+
+
+
+
     playbackState.add(
       playbackState.value.copyWith(
         repeatMode: repeatMode,
@@ -50,7 +65,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await player.setLoopMode(
       repeatMode == AudioServiceRepeatMode.one
           ? LoopMode.one
-          : LoopMode.all,
+          : LoopMode.all
+
     );
   }
 
@@ -100,7 +116,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             repeatMode: repeatMode,
           );
         });
-
+player.sequenceStateStream.listen((sequenceState){});
     Rx.combineLatest2<PlaybackState, Duration, PlaybackState>(
       playbackStateStream,
       player.positionStream,
@@ -111,6 +127,36 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     });
 
+    player.playbackEventStream.listen((event) async {
+      if(event.processingState==ProcessingState.completed){
+
+        if(randomSong){
+          for (var song in songs) {
+            if(song.hasBeenLoaded==false){
+              Log.d("Encontre unajihih");
+              break;
+            }
+            else{
+              for (var song in songs) {
+                song.hasBeenLoaded=false;
+              }
+            }
+          }
+          int random= Random().nextInt(songs.length-1);
+
+          while(songs[random].hasBeenLoaded==true){
+            random= Random().nextInt(songs.length-1);
+          }
+
+          await loadSong(songs[random].item);
+
+          previousIndex=currentIndex;
+          currentIndex=random;
+          songs[random].hasBeenLoaded=true;
+          return;
+
+        }
+    }});
     player.currentIndexStream.listen((index) {
       if (!isFromDuo && index != null && queue.value.isNotEmpty && index < queue.value.length) {
         mediaItem.add(queue.value[index]);
@@ -126,13 +172,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     });
 
-    player.processingStateStream.listen((state) async {
-      if (!isFromDuo && state == ProcessingState.completed) {
-        final loopMode = player.loopMode;
-        if (loopMode == LoopMode.one) return;
-        await skipToNext();
-      }
-    });
     _pcmPlayingSubject.listen((playing) {
 
       if (isFromDuo) {
@@ -252,15 +291,56 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       return;
     }
+
+    if(randomSong){
+
+      for (var song in songs) {
+        if(song.hasBeenLoaded==false){
+          Log.d("Encontre unajihih");
+          break;
+        }
+        else{
+          for (var song in songs) {
+            song.hasBeenLoaded=false;
+          }
+        }
+      }
+      int random= Random().nextInt(songs.length-1);
+
+      while(songs[random].hasBeenLoaded==true){
+
+        random= Random().nextInt(songs.length-1);
+
+      }
+      await loadSong(songs[random].item);
+      previousIndex=currentIndex;
+      songs[random].hasBeenLoaded=true;
+      currentIndex=random;
+      return;
+
+    }
+    Log.d('skipToNext, the next song is ${songs[currentIndex+1].item.id}');
     if (player.loopMode == LoopMode.one) {
       await player.setLoopMode(LoopMode.all);
-      await player.seekToNext();
+      if(currentIndex+1>(songs.length)){
+        previousIndex=currentIndex;
+        await loadSong(songs[0].item);
+        currentIndex=0;
+      }
+      await loadSong(songs[currentIndex+1].item);
       await player.setLoopMode(LoopMode.one);
     } else {
-      await player.seekToNext();
+      if(currentIndex+1>(songs.length)){
+        previousIndex=currentIndex;
+        await loadSong(songs[0].item);
+        currentIndex=0;
+      }
+      previousIndex=currentIndex;
+      await loadSong(songs[currentIndex+1].item);
+      currentIndex++;
     }
   }
-
+int currentIndex=0;
   @override
   Future<void> skipToPrevious() async {
     if (isFromDuo) {
@@ -268,12 +348,24 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         customEvent.add('skipToPrevious');
     }return;
     }
+
     if (player.loopMode == LoopMode.one) {
       await player.setLoopMode(LoopMode.all);
-      await player.seekToPrevious();
+      if(previousIndex==-1){
+        previousIndex=currentIndex;
+        await loadSong(songs[songs.length-1].item);
+        currentIndex=songs.length-1;
+      }
+      await loadSong(songs[previousIndex!].item);
+
       await player.setLoopMode(LoopMode.one);
     } else {
-      await player.seekToPrevious();
+      if(previousIndex==-1){
+        previousIndex=currentIndex;
+        await loadSong(songs[songs.length-1].item);
+        currentIndex=songs.length-1;
+      }
+      await loadSong(songs[previousIndex!].item);
     }
   }
 
@@ -290,7 +382,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> loadPlaylist(List<MediaItem> items, bool isFromDuo, {int startIndex = 0}) async {
     this.isFromDuo = isFromDuo;
 
-    final sources = items.map((item) {
+    /*final sources = items.map((item) {
       Uri uri;
       if (item.id.startsWith('http')) {
         uri = Uri.parse(item.id);
@@ -298,24 +390,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         uri = Uri.file(item.id);
       }
       return AudioSource.uri(uri, tag: item);
-    }).toList();
+    }).toList();*/
+    for (var item in items) {
+      songs.add(Song(item, false));
 
-
-    queue.add(items);
-    if (items.isNotEmpty) {
-      mediaItem.add(items[startIndex]);
-      playbackState.add(playbackState.value.copyWith(queueIndex: startIndex));
     }
-
+    songs[startIndex].hasBeenLoaded=true;
     if (!this.isFromDuo) {
-      await player.setAudioSource(
-        ConcatenatingAudioSource(children: sources),
-        initialIndex: startIndex,
-      );
-      play();
+
+      await loadSong(items[startIndex]);
+      currentIndex=startIndex;
+
     }
   }
-
+Future<void> loadSong(MediaItem item) async {
+    final source=AudioSource.file((item.id), tag: item);
+    mediaItem.add(item);
+    playbackState.add(playbackState.value.copyWith(queueIndex: 0));
+    await player.setAudioSource(source);
+    play();
+}
   //PCM PLAYER METODOS
   Future<void> initialize() async {
     if(Platform.isAndroid){

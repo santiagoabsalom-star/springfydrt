@@ -2,6 +2,7 @@ import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
+import '../../core/log.dart';
 import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
 
@@ -80,10 +81,12 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
           return StreamBuilder<PlaybackState>(
             stream: audioHandler.playbackState,
             builder: (context, playbackStateSnapshot) {
+
               final playbackState = playbackStateSnapshot.data;
               final isPlaying = playbackState?.playing ?? false;
               final position = playbackState?.position ?? Duration.zero;
               final totalDuration = mediaItem.duration ?? Duration.zero;
+
               final repeatMode = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
 
               return Padding(
@@ -150,16 +153,31 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
                           iconSize: 25,
                           icon: Icon(
 
-                            repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                            repeatMode == AudioServiceRepeatMode.one
+                                ? Icons.repeat_one
+                                : audioHandler.randomSong
+                                ? Icons.shuffle
+                                : (repeatMode == AudioServiceRepeatMode.all && !audioHandler.randomSong)
+                                ? Icons.repeat
+                                : Icons.repeat_outlined,
                             color: repeatMode != AudioServiceRepeatMode.none ? Theme.of(context).colorScheme.primary : Colors.grey,
                           ),
                           onPressed: () {
+                            Log.d("repeatMode: $repeatMode and ${audioHandler.randomSong}");
                             if (repeatMode == AudioServiceRepeatMode.none) {
+
                               audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
-                            } else if (repeatMode == AudioServiceRepeatMode.all) {
+                            } else if (repeatMode == AudioServiceRepeatMode.all && !audioHandler.randomSong) {
+
                               audioHandler.setRepeatMode(AudioServiceRepeatMode.one);
-                            } else {
-                              audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+
+                            } else if(repeatMode == AudioServiceRepeatMode.one  ) {
+                               audioHandler.randomSong=true;
+                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+                            }
+                            else if(audioHandler.randomSong && repeatMode == AudioServiceRepeatMode.all){
+                              audioHandler.randomSong=false;
+                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
                             }
                           },
                         ),
@@ -190,7 +208,15 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
       ),
     );
   }
+Future<void> enableRandom(AudioServiceRepeatMode repeatMode) async {
+  if(repeatMode==AudioServiceRepeatMode.one){
+    audioHandler.randomSong=true;
+    }
+  else{
+    audioHandler.randomSong=false;
+  }
 
+}
   String _format(Duration d) {
     final hours = d.inHours;
     final minutes = d.inMinutes.remainder(60);
