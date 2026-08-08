@@ -11,7 +11,6 @@ import 'package:springfydrt/features/session/sessionpage.dart';
 import 'package:springfydrt/features/streaming/streaming.dart';
 
 import '../../../home/home_page.dart';
-import '../../../notSupportedPlatform/notSupported.dart';
 import '../../navigation_controller.dart';
 
 class MainPage extends StatefulWidget {

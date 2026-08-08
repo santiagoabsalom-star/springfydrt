@@ -1,8 +1,8 @@
+
 import 'package:springfydrt/core/text.dart';
 import 'package:springfydrt/custom/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:springfydrt/features/notifier/notifier.dart';
-import '../../core/log.dart';
 import '../../main.dart';
 import '../home/dtos/LocalSong.dart';
 
@@ -25,7 +25,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMixin {
-  late final bool isOpenFromCloud= widget.isOpenFromCloud;
+  late bool isOpenFromCloud= widget.isOpenFromCloud;
   @override
   bool get wantKeepAlive => true;
   @override
@@ -43,7 +43,9 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
       }
     }
   }
-
+  void openFromCloud(){
+    isOpenFromCloud=true;
+  }
   void _onDuoModeStarted() {
     audioHandler.stop();
     if (mounted) {
@@ -138,10 +140,30 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         IconButton(
+                          iconSize: 25,
+                          icon: Icon(
+
+
+                                 Icons.repeat
+                             ,
+                            color: repeatMode != AudioServiceRepeatMode.none ?  Theme.of(context).colorScheme.primary : Colors.grey,
+                          ),
+                          onPressed: () async {
+                          if(repeatMode==AudioServiceRepeatMode.none){
+                            audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+                          }
+                          else if(repeatMode==AudioServiceRepeatMode.all){
+                            audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+                          }
+                          },
+
+                        ),
+                        IconButton(
                           iconSize: 80,
                           icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
                           onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
-                        )
+                        ),
+
                       ],
                     )
                     :
@@ -153,33 +175,47 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
                           iconSize: 25,
                           icon: Icon(
 
-                            repeatMode == AudioServiceRepeatMode.one
-                                ? Icons.repeat_one
-                                : audioHandler.randomSong
-                                ? Icons.shuffle
-                                : (repeatMode == AudioServiceRepeatMode.all && !audioHandler.randomSong)
+                            repeatMode == AudioServiceRepeatMode.all
                                 ? Icons.repeat
-                                : Icons.repeat_outlined,
-                            color: repeatMode != AudioServiceRepeatMode.none ? Theme.of(context).colorScheme.primary : Colors.grey,
+                                : audioHandler.randomSong==true?
+                                Icons.shuffle:
+                                Icons.repeat,
+                            color: repeatMode != AudioServiceRepeatMode.none || audioHandler.randomSong ?  Theme.of(context).colorScheme.primary : Colors.grey,
                           ),
-                          onPressed: () {
-                            Log.d("repeatMode: $repeatMode and ${audioHandler.randomSong}");
-                            if (repeatMode == AudioServiceRepeatMode.none) {
-
-                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
-                            } else if (repeatMode == AudioServiceRepeatMode.all && !audioHandler.randomSong) {
-
-                              audioHandler.setRepeatMode(AudioServiceRepeatMode.one);
-
-                            } else if(repeatMode == AudioServiceRepeatMode.one  ) {
-                               audioHandler.randomSong=true;
-                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+                          onPressed: () async {
+                            if(repeatMode==AudioServiceRepeatMode.none && !audioHandler.randomSong){
+                              await audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
                             }
-                            else if(audioHandler.randomSong && repeatMode == AudioServiceRepeatMode.all){
+                            else if(repeatMode==AudioServiceRepeatMode.all && !audioHandler.randomSong){
+                              audioHandler.randomSong=true;
+                              await audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+
+                            }
+                            else if(audioHandler.randomSong && repeatMode==AudioServiceRepeatMode.none){
                               audioHandler.randomSong=false;
-                              audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+
                             }
+                            /*         countWithoutCloud= repeatMode== AudioServiceRepeatMode.none ? 1 : (audioHandler.randomSong==true) ? 3 : 2;
+                            Log.d('$countWithoutCloud');
+                            Log.d("repeatMode: $repeatMode and ${audioHandler.randomSong}");
+                            if (countWithoutCloud==1) {
+
+                             await  audioHandler.setRepeatMode(AudioServiceRepeatMode.all);
+                            }  else if(countWithoutCloud==2  ) {
+                               audioHandler.randomSong=true;
+                              await audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+                            }
+                            else if(countWithoutCloud==3){
+                              audioHandler.randomSong=false;
+                              await audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+                              countWithoutCloud=0;
+                            }
+
+                            countWithoutCloud++;
+                            Log.d('$countWithoutCloud');
+                            Log.d("repeatMode: $repeatMode and ${audioHandler.randomSong}");*/
                           },
+
                         ),
                         IconButton(
                           iconSize: 48,
@@ -208,6 +244,7 @@ class _PlayerPageState extends State<PlayerPage>with AutomaticKeepAliveClientMix
       ),
     );
   }
+
 Future<void> enableRandom(AudioServiceRepeatMode repeatMode) async {
   if(repeatMode==AudioServiceRepeatMode.one){
     audioHandler.randomSong=true;

@@ -26,7 +26,7 @@ class MiniPlayer extends StatelessWidget {
             final bool? isPlayingFromDuo = playbackState?.isPlayingFromDuo;
             final List<LocalSong> currentPlaylist = getCurrentPlayList();
             final processingState = playbackState?.processingState ?? AudioProcessingState.idle;
-
+            final isOpenFromCloud=audioHandler.isOpenFromCloud;
             final position = playbackState?.position;
             final duration = mediaItem?.duration ?? Duration.zero;
             if ( (mediaItem == null || processingState == AudioProcessingState.idle) || isPlayingFromDuo==true ) {
@@ -43,7 +43,7 @@ class MiniPlayer extends StatelessWidget {
                         PlayerPage(
                           playlist: currentPlaylist,
                           initialIndex: currentIndex,
-                          isOpenFromCloud: false,
+                          isOpenFromCloud: isOpenFromCloud,
 
                           isOpeningFromMiniPlayer: true,
                         ),
@@ -109,10 +109,11 @@ class MiniPlayer extends StatelessWidget {
                               ],
                             ),
                           ),
+                          ?!isOpenFromCloud ?
                           IconButton(
                             icon: const Icon(Icons.skip_previous),
                             onPressed: audioHandler.skipToPrevious,
-                          ),
+                          ) : null,
                           IconButton(
                             iconSize: 36.0,
                             icon: Icon(
@@ -122,10 +123,10 @@ class MiniPlayer extends StatelessWidget {
                             onPressed:
                             isPlaying ? audioHandler.pause : audioHandler.play,
                           ),
-                          IconButton(
+                          ?!isOpenFromCloud ?IconButton(
                             icon: const Icon(Icons.skip_next),
                             onPressed: audioHandler.skipToNext,
-                          ),
+                          ): null,
                           const SizedBox(width: 8),
                         ],
                       ),

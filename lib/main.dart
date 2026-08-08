@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
@@ -63,17 +62,7 @@ void fixLinuxNumericLocale() {
   }
 }
 
-extension on String {
-  Pointer<Int8> toNativeUtf8() {
-    final units = utf8.encode(this);
-    final Pointer<Int8> result = calloc<Int8>(units.length + 1);
-    for (int i = 0; i < units.length; i++) {
-      result[i] = units[i];
-    }
-    result[units.length] = 0;
-    return result;
-  }
-}
+
 //Ejemplo de notificacion para linux
 /*
 NotificationDetails notificationDetails =  NotificationDetails(

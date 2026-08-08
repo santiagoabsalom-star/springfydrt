@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:springfydrt/core/network/api_connect.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import '../../core/directories.dart';
 import '../../core/log.dart';
 import '../../main.dart';
@@ -104,6 +106,9 @@ void initState() {
           videoId: song.videoId
       );
       StreamFromPlayerNotifier.instance.notify();
+      audioHandler.randomSong=false;
+      audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+      audioHandler.isOpenFromCloud=true;
       audioHandler.loadPlaylist([localsong.toMediaItem()], false, startIndex: 0 );
     } catch (e) {
       Log.d("Error: $e");
@@ -161,6 +166,7 @@ void initState() {
                     cloudDownloaded: _cloudDownloaded.contains(video.videoId),
                     onTap: () => {
                       if(_isConnected){
+
                       openPlayerFromCloud(context, video)}else{
                         showTopNotification(context, "Tienes que tener internet para navegar")
 
@@ -202,7 +208,7 @@ void initState() {
       info,
       videoId,
       directory.path,
-      rootToken!,
+      rootToken!,ApiConnect.baseUrl
     ));
     await database.addSongToDirectory(info.videoId, directory.path);
     DownloadsNotifier.instance.notify();

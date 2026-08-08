@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import 'package:springfydrt/core/log.dart';
 import '../../features/login/api/token.dart';
 class ApiConnect {
 
 
+/*
   static String baseUrl = 'http://springfy.tplinkdns.com:3051';
+*/
+  static String baseUrl='http://192.168.0.104:3050';
   static final instance= ApiConnect._();
   ApiConnect._();
 
@@ -15,6 +18,9 @@ class ApiConnect {
       Map<String, dynamic> body, {
         Map<String, String>? extraHeaders,
       }) async {
+
+    Log.d(baseUrl);
+
     final uri = Uri.parse('$baseUrl$path');
     String? token;
     if (auth) {

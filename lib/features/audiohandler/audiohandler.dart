@@ -19,6 +19,8 @@ class Song{
 }
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final player = AudioPlayer();
+  bool isOpenFromCloud=false;
+  int currentIndex=0;
   final audioStream= getAudioStream();
   bool randomSong=false;
   int? previousIndex = -1;
@@ -31,10 +33,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   List<Song> songs=[];
   List<MediaItem> customQueue = [];
   List<MediaItem> customItem=[];
-  Future<void> reset() async {
+  Future<void> reset({bool isHasToReset=false}) async {
+    if(isHasToReset){
+      songs.clear();
+      customQueue.clear();
+      customItem.clear();
+      currentIndex=0;
+    }
     if(isFromDuo){
       mediaItem.add(null);
-      await player.pause();
+      if(!isHasToReset) {
+        await player.pause();
+      }
+
       await player.setAudioSource(ConcatenatingAudioSource(children: []));
       queue.add([]);
       isFromDuo = false;
@@ -61,14 +72,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         repeatMode: repeatMode,
       ),
     );
+      if(repeatMode==AudioServiceRepeatMode.none){
+        await player.setLoopMode(LoopMode.off);
+      }else {
+        await player.setLoopMode(
+            repeatMode == AudioServiceRepeatMode.one
+                ? LoopMode.one
+                : LoopMode.all
 
-    await player.setLoopMode(
-      repeatMode == AudioServiceRepeatMode.one
-          ? LoopMode.one
-          : LoopMode.all
 
-    );
-  }
+        );
+      }  }
 
   MyAudioHandler() {
     final playbackStateStream = Rx.combineLatest4<PlaybackEvent, LoopMode, bool, int?, PlaybackState>(
@@ -126,37 +140,24 @@ player.sequenceStateStream.listen((sequenceState){});
         playbackState.add(state);
       }
     });
-
+    player.positionDiscontinuityStream.listen((discontinuity) {
+      if (discontinuity.reason == PositionDiscontinuityReason.autoAdvance) {
+        Log.d('Finished current track, continuing onto next');
+      }
+    });
     player.playbackEventStream.listen((event) async {
       if(event.processingState==ProcessingState.completed){
 
         if(randomSong){
-          for (var song in songs) {
-            if(song.hasBeenLoaded==false){
-              Log.d("Encontre unajihih");
-              break;
-            }
-            else{
-              for (var song in songs) {
-                song.hasBeenLoaded=false;
-              }
-            }
-          }
-          int random= Random().nextInt(songs.length-1);
 
-          while(songs[random].hasBeenLoaded==true){
-            random= Random().nextInt(songs.length-1);
-          }
-
-          await loadSong(songs[random].item);
-
-          previousIndex=currentIndex;
-          currentIndex=random;
-          songs[random].hasBeenLoaded=true;
-          return;
-
-        }
+          await randomSongLoad();
+        }else{
+        Future.microtask(() {
+          Log.d("Skipping to next DDDD");
+          skipToNext();
+        });}
     }});
+
     player.currentIndexStream.listen((index) {
       if (!isFromDuo && index != null && queue.value.isNotEmpty && index < queue.value.length) {
         mediaItem.add(queue.value[index]);
@@ -232,7 +233,31 @@ player.sequenceStateStream.listen((sequenceState){});
       ));
     }
   }
+  Future<void> randomSongLoad()async {
+    List availableSongs = songs.where((song) => !song.hasBeenLoaded).toList();
 
+    if (availableSongs.isEmpty) {
+      for (var song in songs) {
+        song.hasBeenLoaded = false;
+      }
+      availableSongs = List.from(songs);
+    }
+
+    if (availableSongs.isNotEmpty) {
+      int randomIndex = Random().nextInt(availableSongs.length);
+      var selectedSong = availableSongs[randomIndex];
+
+      selectedSong.hasBeenLoaded = true;
+
+      Future.microtask(() async {
+        await loadSong(selectedSong.item);
+      });
+
+      previousIndex = currentIndex;
+      currentIndex = randomIndex;
+      songs[randomIndex].hasBeenLoaded = true;
+    }
+  }
   Future<void> stopAndClearPlayer() async {
     mediaItem.add(null);
     playbackState.add(playbackState.value.copyWith(
@@ -265,7 +290,12 @@ player.sequenceStateStream.listen((sequenceState){});
     }
     await player.pause();
   }
+  Future<int> randomSongFromPlaylist(int playListLenght,int index) async {
+    //Victor va a jugar
+    //TODO retornar un indice desde 0...playListLenght, random, que no sea el indice actual
+      return 1;
 
+  }
   @override
   Future<void> stop() async {
     if (isFromDuo) {
@@ -285,62 +315,51 @@ player.sequenceStateStream.listen((sequenceState){});
 
   @override
   Future<void> skipToNext() async {
+
     if (isFromDuo) {
       if(isHost) {
         customEvent.add('skipToNext');
       }
       return;
     }
+    if(songs.length>1) {
+      if (randomSong) {
+       Future.microtask((){randomSongLoad();});
+      }else{
 
-    if(randomSong){
-
-      for (var song in songs) {
-        if(song.hasBeenLoaded==false){
-          Log.d("Encontre unajihih");
-          break;
+      if (player.loopMode == LoopMode.one) {
+        await player.setLoopMode(LoopMode.all);
+        if (currentIndex + 1 > (songs.length)) {
+          previousIndex = currentIndex;
+          await loadSong(songs[0].item);
+          currentIndex = 0;
+          Log.d("$previousIndex");
+          Log.d("$currentIndex");
         }
-        else{
-          for (var song in songs) {
-            song.hasBeenLoaded=false;
-          }
+        await loadSong(songs[currentIndex + 1].item);
+        await player.setLoopMode(LoopMode.one);
+      } else {
+        if (currentIndex + 1 > (songs.length-1)) {
+          previousIndex = -1;
+          await loadSong(songs[0].item);
+
+          currentIndex = 0;
+          Log.d("$previousIndex");
+          Log.d("$currentIndex");
         }
-      }
-      int random= Random().nextInt(songs.length-1);
+        else {
+          previousIndex = currentIndex;
+          Log.d('$currentIndex');
+          await loadSong(songs[currentIndex + 1].item);
+          currentIndex++;
+          Log.d("$previousIndex");
+          Log.d("$currentIndex");
+        }
+      }}
 
-      while(songs[random].hasBeenLoaded==true){
-
-        random= Random().nextInt(songs.length-1);
-
-      }
-      await loadSong(songs[random].item);
-      previousIndex=currentIndex;
-      songs[random].hasBeenLoaded=true;
-      currentIndex=random;
-      return;
-
-    }
-    Log.d('skipToNext, the next song is ${songs[currentIndex+1].item.id}');
-    if (player.loopMode == LoopMode.one) {
-      await player.setLoopMode(LoopMode.all);
-      if(currentIndex+1>(songs.length)){
-        previousIndex=currentIndex;
-        await loadSong(songs[0].item);
-        currentIndex=0;
-      }
-      await loadSong(songs[currentIndex+1].item);
-      await player.setLoopMode(LoopMode.one);
-    } else {
-      if(currentIndex+1>(songs.length)){
-        previousIndex=currentIndex;
-        await loadSong(songs[0].item);
-        currentIndex=0;
-      }
-      previousIndex=currentIndex;
-      await loadSong(songs[currentIndex+1].item);
-      currentIndex++;
     }
   }
-int currentIndex=0;
+
   @override
   Future<void> skipToPrevious() async {
     if (isFromDuo) {
@@ -348,24 +367,40 @@ int currentIndex=0;
         customEvent.add('skipToPrevious');
     }return;
     }
+    if(songs.length>1) {
+      Log.d("$previousIndex");
+      Log.d("$currentIndex");
 
-    if (player.loopMode == LoopMode.one) {
-      await player.setLoopMode(LoopMode.all);
-      if(previousIndex==-1){
-        previousIndex=currentIndex;
-        await loadSong(songs[songs.length-1].item);
-        currentIndex=songs.length-1;
-      }
-      await loadSong(songs[previousIndex!].item);
+      if (player.loopMode == LoopMode.one) {
+        await player.setLoopMode(LoopMode.all);
+        if (previousIndex == -1) {
 
-      await player.setLoopMode(LoopMode.one);
-    } else {
-      if(previousIndex==-1){
-        previousIndex=currentIndex;
-        await loadSong(songs[songs.length-1].item);
-        currentIndex=songs.length-1;
+          previousIndex = currentIndex;
+          Log.d("$previousIndex");
+          await loadSong(songs[songs.length - 1].item);
+          currentIndex = songs.length - 1;
+        }
+        await loadSong(songs[previousIndex!].item);
+
+        await player.setLoopMode(LoopMode.one);
+      } else {
+        if (previousIndex == -1) {
+          Log.d('$previousIndex');
+
+          await loadSong(songs[songs.length - 1].item);
+          currentIndex = songs.length - 1;
+          previousIndex=currentIndex-1;
+        }
+        else {
+          Log.d('$previousIndex');
+          Log.d('$currentIndex');
+          await loadSong(songs[currentIndex-1].item);
+
+          currentIndex=currentIndex-1;
+          previousIndex=currentIndex-1;
+
+        }
       }
-      await loadSong(songs[previousIndex!].item);
     }
   }
 
@@ -380,6 +415,8 @@ int currentIndex=0;
   }
 
   Future<void> loadPlaylist(List<MediaItem> items, bool isFromDuo, {int startIndex = 0}) async {
+    songs.clear();
+
     this.isFromDuo = isFromDuo;
 
     /*final sources = items.map((item) {
@@ -398,8 +435,12 @@ int currentIndex=0;
     songs[startIndex].hasBeenLoaded=true;
     if (!this.isFromDuo) {
 
-      await loadSong(items[startIndex]);
       currentIndex=startIndex;
+      previousIndex=currentIndex-1;
+      Log.d('$currentIndex and $previousIndex');
+      Log.d("${songs.length}");
+      await loadSong(items[startIndex]);
+
 
     }
   }

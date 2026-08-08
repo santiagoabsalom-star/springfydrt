@@ -5,15 +5,22 @@ import 'package:springfydrt/core/network/api_connect.dart';
 import 'package:web_socket_channel/io.dart';
 
 import '../../../core/log.dart';
-final Uri pcmUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
+ Uri pcmUri= Uri.parse("ws://springfy.tplinkdns.com:3051/stream");
 //final Uri messageUri= Uri.parse("ws://springfy.tplinkdns.com:3051/message");
 Map<String, String> applicationHeader= {
   'Application-id': 'sp-rin-g-fy-id-application-android/29912/'
 
 };
 
-Future<IOWebSocketChannel> pcmConnect(Map<String,String> headers) async {
+Future<IOWebSocketChannel> pcmConnect(Map<String,String> headers,String ip) async {
   headers.addAll(applicationHeader);
+  String cleanIp = ip.trim().replaceAll('http://', '').replaceAll('https://', '');
+
+  if (cleanIp.endsWith('/')) {
+    cleanIp = cleanIp.substring(0, cleanIp.length - 1);
+  }
+
+  Uri pcmUri = Uri.parse('ws://$cleanIp/stream');
 return IOWebSocketChannel.connect(pcmUri, headers: headers);
 
 

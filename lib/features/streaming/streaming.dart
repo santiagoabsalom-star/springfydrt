@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:springfydrt/core/network/api_connect.dart';
 import 'package:springfydrt/core/text.dart';
 import 'dart:io';
 import 'dart:typed_data';
@@ -686,7 +687,7 @@ Future<void> obtenerDuo() async {
       if (mounted) {
         if (await hasConnection()) {
           //_messagesChannel = await messageConnect(userHeader);
-          _pcmchannel = await pcmConnect(userHeader);
+          _pcmchannel = await pcmConnect(userHeader,ApiConnect.baseUrl);
          if(Platform.isAndroid){WakelockPlus.enable();}
         } else {
           Log.d("No hay conexión a internet");
@@ -760,7 +761,7 @@ Future<void> obtenerDuo() async {
 
           if (mounted) {
             if (await hasConnection()) {
-              _pcmchannel = await pcmConnect(userHeader);
+              _pcmchannel = await pcmConnect(userHeader,ApiConnect.baseUrl);
               Log.d("WebSocket connected.");
             } else {
               Log.d("No hay conexión a internet");
@@ -838,7 +839,7 @@ Future<void> obtenerDuo() async {
 
           if (mounted) {
             if (await hasConnection()) {
-              _pcmchannel = await pcmConnect(userHeader);
+              _pcmchannel = await pcmConnect(userHeader,ApiConnect.baseUrl);
               Log.d("WebSocket connected.");
             } else {
               Log.d("No hay conexión a internet");
@@ -1291,7 +1292,22 @@ setState(() {
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Scaffold(
+
+    return PopScope(canPop: false,onPopInvokedWithResult: (bool didPop, Object? result){
+      if (didPop) {
+        return;
+      }
+      bool shouldPop=_selectedDirectory == null ? false : true;
+
+
+      if (shouldPop) {
+
+        setState(() {
+          _selectedDirectory=null;
+        });
+      }
+
+    },child: Scaffold(
       appBar: AppBar(
         title: const Text('Dúo'),
         leading: _selectedDirectory != null
@@ -1359,7 +1375,7 @@ setState(() {
           },
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildSongListUI() {

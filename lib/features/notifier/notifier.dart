@@ -24,6 +24,7 @@ class CloudNotifier extends ChangeNotifier {
     notifyListeners();
   }
 }
+
 class StreamFromPlayerNotifier extends ChangeNotifier {
   StreamFromPlayerNotifier._();
 

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:springfydrt/core/text.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import 'package:springfydrt/features/yourdata/api/usageApi.dart';
 import 'package:springfydrt/main.dart';
 
@@ -71,7 +72,21 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
+    return PopScope(canPop: false,onPopInvokedWithResult: (bool didPop, Object? result) async {
+      if (didPop) {
+        return;
+      }
+      bool shouldPop=selectedFolder == null ? false : true;
+
+
+      if (shouldPop) {
+
+        setState(() {
+          selectedFolder=null;
+        });
+      }
+    },child:
+      Scaffold(
       appBar: AppBar(
         title: const Text('Biblioteca'),
         leading: selectedFolder != null
@@ -278,6 +293,9 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
                 ),
 
                 onTap: () {
+                  audioHandler.isOpenFromCloud=false;
+                  audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+                  audioHandler.randomSong=false;
                   StreamFromPlayerNotifier.instance.notify();
                   Navigator.push(
                     context,
@@ -311,7 +329,7 @@ class _DownloadedSongsPageState extends State<DownloadedSongsPage> with WidgetsB
           );
         },
       ),
-    );
+    ));
   }
 
 

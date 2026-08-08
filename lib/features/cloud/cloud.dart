@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:springfydrt/core/database/connection.dart';
+import 'package:springfydrt/core/network/api_connect.dart';
 import 'package:springfydrt/core/text.dart';
+import 'package:springfydrt/custom/audio_service.dart';
 import 'package:springfydrt/features/cloud/api/api_cloud.dart';
 import 'package:springfydrt/features/cloud/dto/audioDto.dart';
 import 'package:springfydrt/features/home/api/download_api.dart';
@@ -104,6 +106,7 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
         audio.audioId,
         directory.path,
           rootToken!,
+          ApiConnect.baseUrl
         ));
 
 
@@ -113,7 +116,9 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
         showTopNotification(context, "Cancion descargada");
       }
     } catch (e) {
+      Log.d('$e');
       if (mounted) {
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error al descargar: $e')));
@@ -378,6 +383,7 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
   }
   Future<void> openPlayerFromCloud(BuildContext context, AudioDTO song) async {
     try {
+
       showTopNotification(context, "Iniciando cancion");
       final bytes = await _downloadApi.downloadOnApp(song.audioId);
       final tempDir = await getTemporaryDirectory();
@@ -391,6 +397,9 @@ class _CloudPageState extends State<CloudPage>with AutomaticKeepAliveClientMixin
           videoId: song.audioId
       );
       StreamFromPlayerNotifier.instance.notify();
+      audioHandler.setRepeatMode(AudioServiceRepeatMode.none);
+      audioHandler.randomSong=false;
+      audioHandler.isOpenFromCloud=true;
       audioHandler.loadPlaylist(
           [localsong.toMediaItem()], false, startIndex: 0);
     } catch (e) {

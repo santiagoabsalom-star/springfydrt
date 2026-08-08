@@ -13,7 +13,7 @@ dependencies:
   fl_chart: ^1.2.0
   ffi: ^2.1.0
   drift: ^2.14.1
-  sqlite3_flutter_libs: ^0.5.18
+
 
   just_audio_media_kit: ^2.1.0
   shared_preferences: ^2.5.5
@@ -22,16 +22,16 @@ dependencies:
   timezone: ^0.11.0
   wakelock_plus: ^1.2.8
   web_socket_channel: ^2.4.0
-  cupertino_icons: ^1.0.8
+
   http: ^1.6.0
   path_provider: ^2.1.2
   connectivity_plus: ^6.0.3
   rxdart: ^0.27.7
-  audio_service: ^0.18.2
+  audio_service: ^0.18.19
   just_audio: ^0.9.36
   path: ^1.9.1
   flutter_secure_storage: ^9.2.4
-  jwt_decoder: ^2.0.1
+
   flutter_pcm_sound: ^3.3.3
   mp_audio_stream: ^0.2.2
 
@@ -39,11 +39,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  drift_dev: ^2.14.1
-  build_runner: ^2.4.7
-  flutter_lints: ^6.0.0
-  collection: ^1.19.1
-  flutter_launcher_icons: "^0.14.4"
 
 flutter:
   uses-material-design: true
