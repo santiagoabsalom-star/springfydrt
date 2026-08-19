@@ -18,6 +18,12 @@ workflows:
           flutter create . --platforms=ios
           flutter pub get
 
+      - name: Asegurar versión mínima de iOS en el Podfile
+        script: | # Si la línea platform no existe, la agregamos al principio del Podfile de forma segura
+          PODFILE_PATH="ios/Podfile"
+          if ! grep -q "platform :ios" "$PODFILE_PATH"; then
+            echo "platform :ios, '14.0'" | cat - "$PODFILE_PATH" > temp && mv temp "$PODFILE_PATH"
+          fi
       - name: Instalar CocoaPods
         script: |
           cd ios
