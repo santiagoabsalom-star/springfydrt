@@ -13,6 +13,12 @@ workflows:
     scripts:
       - name: Instalar dependencias
         script: flutter pub get
+      - name : Generar archivos nativos de iOS y dependencias
+        script: |
+          # Esto crea la carpeta ios y el Podfile automáticamente si no existen
+          flutter create . --platforms=ios
+          flutter pub get
+
 
       - name: Instalar CocoaPods
         script: |
