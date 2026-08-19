@@ -11,64 +11,12 @@ workflows:
       cocoapods: default
 
     scripts:
-      - name: Generar archivos nativos de iOS
+      - name: Obtener dependencias de Flutter y generar archivos nativos
         script: |
+          
+          # Esto regenera la carpeta ios limpia y el Podfile oficial actualizado al SDK actual de Flutter
           flutter create . --platforms=ios
           flutter pub get
-
-      - name: Forzar plataforma iOS 14.0 en el Podfile
-        script: |
-          # Esto escribe explícitamente la plataforma en la primera línea del Podfile recién creado
-          echo "platform :ios, '14.0'" > ios/Podfile
-          # Copia el contenido esencial que Flutter necesita en el Podfile (o regenera la estructura si es necesario)
-          # O mejor aún, inyectarlo de forma limpia:
-          cat << 'EOF' > ios/Podfile
-          # Uncomment this line to define a global platform for your project
-          platform :ios, '14.0'
-          
-          # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
-          ENV['COCOAPODS_DISABLE_STATS'] = '1'
-          
-          project 'Runner', {
-            'Debug' => :debug,
-            'Profile' => :release,
-            'Release' => :release,
-          }
-          
-          def flutter_root
-            generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-            unless File.exist?(generated_xcode_build_settings_path)
-              raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
-            end
-          
-            File.foreach(generated_xcode_build_settings_path) do |line|
-              matches = line.match(/FLUTTER_ROOT\=(.*)/)
-              return matches[1].strip if matches
-            end
-            raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
-          end
-          
-          require File.expand_path(File.join('package', 'environment'), flutter_root)
-          
-          flutter_app_podfile_hook
-          
-          target 'Runner' do
-            use_frameworks!
-            use_modular_headers!
-          
-            flutter_install_all_ios_pods File.dirname(File.absolute_path(__FILE__))
-          end
-          
-          post_install do |installer|
-            installer.generated_projects.each do |project|
-              project.targets.each do |target|
-                target.build_configurations.each do |config|
-                  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-                end
-              end
-            end
-          end
-          EOF
 
       - name: Instalar CocoaPods
         script: |
