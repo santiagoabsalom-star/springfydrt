@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://json.schemastore.org/codemagic.yaml
+workflows:
+  ios-altsave-workflow:
+    name: Build iOS IPA
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Instalar dependencias
+        script: flutter pub get
+
+      - name: Instalar CocoaPods
+        script: |
+          cd ios
+          pod install
+
+      - name: Compilar IPA sin firmar (o para firma local de AltStore)
+        script: |
+          # Flutter compilará el archivo .ipa de manera genérica
+          flutter build ipa --release --no-codesign
+
+    artifacts:
+      - build/ios/ipa/*.ipa
