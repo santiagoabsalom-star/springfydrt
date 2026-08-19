@@ -19,7 +19,7 @@ workflows:
       - name: Crear un Podfile moderno compatible con iOS 14.0
         script: |
           cat << 'EOF' > ios/Podfile
-          platform :ios, '14.0'
+          platform :ios, '15.0'
           
           ENV['COCOAPODS_DISABLE_STATS'] = '1'
           
