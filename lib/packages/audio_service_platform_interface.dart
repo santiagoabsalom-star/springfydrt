@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:audio_service_platform_interface/no_op_audio_service.dart';
+import 'no_op_audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';

@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui';
 
-import 'package:audio_service_platform_interface/audio_service_platform_interface.dart';
+import '../packages/audio_service_platform_interface.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
