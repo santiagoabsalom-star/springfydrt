@@ -52,6 +52,3 @@ flutter_icons:
   android: true
   ios: true
   image_path: "assets/icon.png"
-dependency_overrides:
-  audio_service_platform_interface:
-    path: packages/audio_service_platform_interface
