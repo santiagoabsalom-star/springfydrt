@@ -58,25 +58,45 @@ workflows:
                 config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
                 config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
                 config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+                config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
               end
             end
           end
           EOF
 
-      - name: Fijar deployment target y desactivar Explicit Modules en Runner.xcodeproj
+      - name: Fijar deployment target en Runner.xcodeproj
         script: |
           cd ios
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 15.0/g' Runner.xcodeproj/project.pbxproj
           /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 15.0" Flutter/AppFrameworkInfo.plist
 
-      - name: Compilar app sin firmar
+      - name: Instalar CocoaPods
         script: |
-          flutter build ios --release --no-codesign
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod install --repo-update
+
+      - name: Preparar build (sin invocar Xcode todavía)
+        script: |
+          flutter build ios --release --no-codesign --config-only
+
+      - name: Compilar con xcodebuild directo, sin firma
+        script: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
 
       - name: Empaquetar IPA sin firmar
         script: |
           mkdir -p build/ios/ipa/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app build/ios/ipa/Payload/
           cd build/ios/ipa
           zip -r app-unsigned.ipa Payload
 
